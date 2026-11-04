@@ -63,7 +63,7 @@ def requirement_refs(line):
 
 def duplicate_if_keys(text):
     # Scope-aware check for duplicate job/step if keys, not a full YAML parser.
-    scopes={};duplicates=[]
+    scopes={}
     for line in text.splitlines():
         if not line.strip() or line.lstrip().startswith('#'):continue
         m=re.match(r'^(\s*)(?:-\s+)?([\w-]+):',line)
@@ -74,19 +74,21 @@ def duplicate_if_keys(text):
                 if level>=indent:del scopes[level]
         for level in list(scopes):
             if level>indent:del scopes[level]
-        if key=='if' and key in scopes.get(indent,set()):duplicates.append(line.strip())
+        if key=='if' and key in scopes.get(indent,set()):yield line.strip()
         if line.rstrip().endswith(':') and key!='if':
             for level in list(scopes):
                 if level>indent:del scopes[level]
         scopes.setdefault(indent,set()).add(key)
-    return duplicates
 
-def scan_text(path: str, text: str) -> list[Finding]:
+def scan_text(path: str, text: str, sink=None) -> list[Finding]:
     result = []
     if str(path).endswith(('.yml','.yaml')):
-        result.extend(Finding(path,'duplicate-if-key','workflow',line) for line in duplicate_if_keys(text))
+        for line in duplicate_if_keys(text):
+            if sink is not None: sink(Finding(path,'duplicate-if-key','workflow',line))
+            else: result.append(Finding(path,'duplicate-if-key','workflow',line))
     def add(rule, scope, evidence):
-        result.append(Finding(path, rule, scope, evidence.strip()))
+        if sink is not None: sink(Finding(path, rule, scope, evidence.strip()))
+        else: result.append(Finding(path, rule, scope, evidence.strip()))
     workflow = path.startswith('.github/workflows/') and path.endswith(('.yml', '.yaml'))
     lines = text.splitlines()
     if workflow:
