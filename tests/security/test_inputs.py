@@ -111,3 +111,34 @@ class InputTests(unittest.TestCase):
             g.git_output(self.root, ['ls-files', '-z'])
         self.assertIn('core.fsmonitor=false', commands[0])
         self.assertIn('core.hooksPath=' + os.devnull, commands[0])
+    def test_final_symlink_swap_never_opens_or_reads_target(self):
+        p = self.tracked('docs/a', b'fixed')
+        outside = self.root/'secret'; outside.write_bytes(b'private-target')
+        real_open = os.open; real_read = os.read; target_opens = []; target_reads = []
+        def swap(path, flags, *args, **kwargs):
+            if path == 'a' and kwargs.get('dir_fd') is not None:
+                p.unlink(); p.symlink_to(outside)
+            fd = real_open(path, flags, *args, **kwargs)
+            if os.fstat(fd).st_ino == outside.stat().st_ino: target_opens.append(fd)
+            return fd
+        def observing(fd, size):
+            if os.fstat(fd).st_ino == outside.stat().st_ino: target_reads.append(fd)
+            return real_read(fd, size)
+        with g.Inputs(self.root) as inputs, patch.object(g.os, 'open', side_effect=swap), patch.object(g.os, 'read', side_effect=observing):
+            with self.assertRaises(g.InputError): inputs.read('docs/a')
+        self.assertEqual(target_opens, [])
+        self.assertEqual(target_reads, [])
+    def test_ancestor_symlink_swap_never_traverses_target(self):
+        self.tracked('docs/a', b'fixed')
+        outside = self.root/'secret-dir'; outside.mkdir(); (outside/'a').write_bytes(b'private-target')
+        real_open = os.open; traversed = []
+        def swap(path, flags, *args, **kwargs):
+            if path == 'docs' and kwargs.get('dir_fd') is not None:
+                (self.root/'docs').rename(self.root/'old-docs')
+                (self.root/'docs').symlink_to(outside, target_is_directory=True)
+            fd = real_open(path, flags, *args, **kwargs)
+            if os.fstat(fd).st_ino in [outside.stat().st_ino, (outside/'a').stat().st_ino]: traversed.append(fd)
+            return fd
+        with g.Inputs(self.root) as inputs, patch.object(g.os, 'open', side_effect=swap):
+            with self.assertRaises(g.InputError): inputs.read('docs/a')
+        self.assertEqual(traversed, [])
