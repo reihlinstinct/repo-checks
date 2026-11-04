@@ -57,3 +57,39 @@ class WrapperTests(unittest.TestCase):
     def test_bad_requirement_path_fails_closed(self):
         self.write('scripts/setup.sh','pip install --require-hashes -r ../SECRET_SYNTHETIC\n')
         r,v=self.run_check(); self.assertEqual(r.returncode,2); self.assertNotIn('SECRET_SYNTHETIC',r.stdout)
+    def test_findings_cap_end_to_end_fixed_redaction(self):
+        self.write('scripts/SECRET_SYNTHETIC.sh', 'pip install SECRET_SYNTHETIC\n' * 1002)
+        r,v=self.run_check(); self.assertEqual(r.returncode,2)
+        self.assertEqual(v['status'],'error'); self.assertNotIn('SECRET_SYNTHETIC',r.stdout+r.stderr)
+    def test_nested_baseline_unknown_duplicate_types_and_size_refused(self):
+        entry={'path':'a','rule':'x','scope':'x','evidence':'x','issue':'https://example.invalid/issue','reason':'x'}
+        variants=[{**entry,'extra':'x'}, {**entry,'reason':True}, {**entry,'evidence':'x'*8193}, {**entry,'path':[]}, {**entry,'issue':7}]
+        for e in variants:
+            self.write('.github/baseline.json',{'version':1,'findings':[e]})
+            r,v=self.run_check(); self.assertEqual(r.returncode,2)
+        raw=json.dumps({'version':1,'findings':[entry]}).replace('"reason": "x"','"reason":"x","reason":"x"')
+        self.write('.github/baseline.json',raw);r,v=self.run_check();self.assertEqual(r.returncode,2)
+    def test_sink_stops_before_unbounded_finding_allocation(self):
+        import importlib
+        from unittest.mock import patch
+        sys.path.insert(0,str(ROOT/'src'))
+        w=importlib.import_module('repo_checks.wrapper'); e=importlib.import_module('repo_checks.scorecard')
+        self.write('scripts/many.sh','pip install synthetic\n'*10000)
+        count=0; original=e.Finding
+        def counted(*args,**kwargs):
+            nonlocal count
+            count+=1
+            return original(*args,**kwargs)
+        with patch.object(e,'Finding',side_effect=counted), self.assertRaises(w.InputError):
+            w.check(self.root,'.repo-checks.json')
+        self.assertLessEqual(count,w.MAX_FINDINGS+1)
+    def test_normalized_current_tree_parity(self):
+        import importlib
+        sys.path.insert(0,str(ROOT/'src'))
+        w=importlib.import_module('repo_checks.wrapper'); e=importlib.import_module('repo_checks.scorecard')
+        fixtures=[('.github/workflows/a.yml','permissions: {}\njobs:\n  test:\n    steps:\n      - uses: actions/checkout@v7\n'),('scripts/build.sh','pip install synthetic\n'),('Dockerfile','FROM ubuntu:latest\n')]
+        for path,text in fixtures:self.write(path,text)
+        with w.Inputs(self.root) as inputs:
+            new=w.scan(inputs)
+        old=e.scan(self.root)
+        self.assertEqual([vars(f) for f in old],[vars(f) for f in new])

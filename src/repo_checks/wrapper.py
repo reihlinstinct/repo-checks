@@ -71,7 +71,7 @@ def scan(inputs):
         if not selected(path):
             continue
         text = inputs.read(path)
-        add(engine.scan_text(path, text))
+        engine.scan_text(path, text, sink=lambda finding: add([finding]))
         joined = re.sub(r'\\\s*\n\s*', ' ', text)
         for line in joined.splitlines():
             if line.lstrip().startswith('#'):
