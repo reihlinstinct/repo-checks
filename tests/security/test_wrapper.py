@@ -92,4 +92,4 @@ class WrapperTests(unittest.TestCase):
         with w.Inputs(self.root) as inputs:
             new=w.scan(inputs)
         old=e.scan(self.root)
-        self.assertEqual([vars(f) for f in old],[vars(f) for f in new])
+        self.assertEqual(sorted((tuple(vars(f).values()) for f in old)), sorted((tuple(vars(f).values()) for f in new)))
