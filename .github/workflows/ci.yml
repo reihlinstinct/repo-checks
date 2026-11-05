@@ -16,13 +16,21 @@ jobs:
       - name: Structure manifest enforcement
         run: python3 -I tools/check_structure.py
       - name: Synthetic regression suite
+        if: always()
         run: python3 -m unittest discover -s tests/security -v
       - name: Privacy scan (tracked text, counts only)
         id: privacy
-        run: python3 -I tools/privacy_scan.py
+        if: always()
+        run: |
+          set +e
+          python3 -I tools/privacy_scan.py
+          rc=$?
+          case "$rc" in 0) state=clean-text;; 1) state=findings;; *) state=error;; esac
+          echo "state=$state" >> "$GITHUB_OUTPUT"
+          exit "$rc"
       - name: Privacy scope summary
         if: always()
         run: |
-          printf "%s\n" "## Privacy scan" "- Privacy step outcome: ${{ steps.privacy.outcome }} (success means tracked-text scan completed)." "- Counts only, no finding values or paths in public logs." "- Binary files require separate review; this is not privacy certification." >> "$GITHUB_STEP_SUMMARY"
+          printf "%s\n" "## Privacy scan" "- Privacy state: ${{ steps.privacy.outputs.state }}; step outcome: ${{ steps.privacy.outcome }}." "- Counts only, no finding values or paths in public logs." "- Binary files require separate review; this is not privacy certification." >> "$GITHUB_STEP_SUMMARY"
       - name: Check own workflow
         run: python3 src/repo_checks/scorecard.py

@@ -93,7 +93,9 @@ class PrivacyTests(unittest.TestCase):
 
 
 
-class HardenedPrivacyTests(PrivacyTests):
+class HardenedPrivacyTests(unittest.TestCase):
+    make_repo = PrivacyTests.make_repo
+    run_cli = PrivacyTests.run_cli
     def test_parentheses_and_id_punctuation(self):
         for value in ['+972 (50) ' + '123-4567', '(050) ' + '123-4567']:
             self.assertIn('phone', p.text_categories(value))
@@ -166,6 +168,38 @@ class HardenedPrivacyTests(PrivacyTests):
         boundary.__enter__.return_value.paths = ['item']
         with patch.object(p, 'Inputs', return_value=boundary), patch.object(p, 'git_output', return_value=b''), patch.object(p.time, 'monotonic', side_effect=[0, 100]), self.assertRaises(p.ScanError):
             p.scan(Path('.'))
+
+
+
+class ExtraPrivacyTests(unittest.TestCase):
+    make_repo = PrivacyTests.make_repo
+    # Delegate helper methods only, not the inherited test methods.
+    def test_phone_boundaries_and_unicode_email(self):
+        for value in ['972'+'501234567', '050/'+'1234567', '050\t1234567', '050\u00a01234567', '050–'+'1234567', '+1234'+'5678', 'word050'+'1234567']:
+            if value.startswith('word'):
+                self.assertNotIn('phone',p.text_categories(value))
+            else:
+                self.assertIn('phone',p.text_categories(value))
+        for value in ['fixture'+'@'+'gmail.com', 'דוגמה'+'@'+'דוגמה.ישראל']:
+            self.assertIn('email',p.text_categories(value))
+        self.assertFalse(p.fictional_phone('+99912'))
+        with self.assertRaises(p.ScanError):p.text_categories('a'*321+'@'+'example.invalid')
+        self.assertIn('secret',p.text_categories('github_'+'pat_'+'X'*40))
+        self.assertNotIn('secret',p.text_categories('github_'+'pat_'+'X'*39))
+
+    def test_alarm_and_stderr_contract(self):
+        from unittest.mock import patch
+        with patch.object(p.sys,'argv',['scan','--root','.']), patch.object(p,'scan',return_value={'status':'pass'}), patch.object(p.signal,'alarm') as alarm:
+            self.assertEqual(0,p.main())
+            self.assertIn(__import__('unittest').mock.call(30),alarm.call_args_list)
+        import repo_checks.inputs as boundary
+        real = subprocess.Popen; calls=[]
+        def capture(*args,**kwargs):
+            calls.append(kwargs);return real(*args,**kwargs)
+        with tempfile.TemporaryDirectory() as d:
+            root=self.make_repo(d)
+            with patch.object(boundary.subprocess,'Popen',side_effect=capture):boundary.git_output(root,['ls-files'])
+        self.assertTrue(all(c['stderr']==subprocess.DEVNULL for c in calls))
 
 
 if __name__ == '__main__':

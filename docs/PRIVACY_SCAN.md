@@ -7,7 +7,7 @@ Exit 0 means no matched patterns in the scanned text, 1 means findings, 2 means
 the input could not be checked within its limits. Missing files, symlinks,
 submodules, unresolved entries and oversized inputs fail closed.
 
-Patterns cover phone-shaped strings, email addresses, Israeli-style nine-digit
+Patterns cover phone-shaped strings (including bare Israeli country code and common Unicode whitespace/dash/slash separators), Unicode/IDN email candidates, Israeli-style nine-digit
 checksum-positive IDs, common token/private-key markers and credential/session
 filenames. Exact example email domains, GitHub noreply domains, reserved +999
 phone forms and NANPA +1-NPA-555-0100 through 0199 are fictional exceptions.
@@ -30,3 +30,9 @@ remain in place. No historical rewriting or consumer settings changes are includ
 The checks intentionally avoid private-token lists or fingerprints. Short personal
 identifier hashes can be guessed. A scan has no authority to disclose source data,
 remove public source documents, revoke credentials or rewrite repository history.
+
+Unicode email support is best-effort candidate recognition, not full RFC/EAI
+validation. Obfuscated addresses, mixed-script confusables, encoded identifiers,
+country-specific phone formats outside the advertised forms and text hidden in
+binary files may be missed. Unicode normalization/OCR is not a substitute for
+review. Long email-shaped candidates fail closed rather than being skipped.

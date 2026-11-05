@@ -142,3 +142,34 @@ class InputTests(unittest.TestCase):
         with g.Inputs(self.root) as inputs, patch.object(g.os, 'open', side_effect=swap):
             with self.assertRaises(g.InputError): inputs.read('docs/a')
         self.assertEqual(traversed, [])
+
+    def test_duplicate_inventory_refused(self):
+        real = g.git_output
+        def duplicate(root, args, *rest):
+            if args == ['ls-files', '-z', '--cached']: return b'a\0a\0'
+            return real(root,args,*rest)
+        with patch.object(g,'git_output',side_effect=duplicate), self.assertRaisesRegex(g.InputError,'^duplicate_inventory$'):
+            with g.Inputs(self.root):pass
+
+    def test_total_running_read_bound(self):
+        self.tracked('a',b'abc')
+        real=g.os.read; fired=False
+        def extra(fd,size):
+            nonlocal fired
+            if not fired:fired=True;return b'abcdef'
+            return real(fd,size)
+        with g.Inputs(self.root) as inputs, patch.object(g,'MAX_TOTAL',5), patch.object(g.os,'read',side_effect=extra):
+            with self.assertRaisesRegex(g.InputError,'^file_limit$'): inputs.read_bytes('a')
+
+    def test_identity_comparison_not_only_types(self):
+        p=self.tracked('a',b'fixed');real=g.os.stat
+        def changed(path,*args,**kwargs):
+            result=real(path,*args,**kwargs)
+            if path=='a' and kwargs.get('dir_fd') is not None:
+                class Changed: pass
+                c=Changed()
+                for key in ['st_dev','st_ino','st_size','st_mtime_ns','st_ctime_ns']:setattr(c,key,getattr(result,key))
+                c.st_ino+=1
+                return c
+            return result
+        with g.Inputs(self.root) as inputs, patch.object(g.os,'stat',side_effect=changed), self.assertRaisesRegex(g.InputError,'^file_changed$'):inputs.read_bytes('a')

@@ -18,8 +18,8 @@ from pathlib import Path
 
 VERSION = 1
 MAX_FILES = MAX_PATHS
-EMAIL_CANDIDATE = re.compile(r"[A-Za-z0-9._%+@\-]+")
-PHONE = re.compile(r"(?<![\w+])(?:\+\d(?:[ .()-]{0,3}\d){7,14}\)?|00\d(?:[ .()-]{0,3}\d){7,14}\)?|\(?0[2-9](?:[ .()-]{0,3}\d){7,8}\)?)(?!\w)")
+EMAIL_CANDIDATE = re.compile(r"[\w._%+@\-]+", re.UNICODE)
+PHONE = re.compile(r"(?<![\w+])(?:972(?:[\s/–—.()-]{0,3}\d){9}|\+\d(?:[\s/–—.()-]{0,3}\d){7,14}\)?|00\d(?:[\s/–—.()-]{0,3}\d){7,14}\)?|\(?0[2-9](?:[\s/–—.()-]{0,3}\d){7,8}\)?)(?!\w)")
 ID = re.compile(r"(?<![\w.\-])\d{9}(?![\w\-]|\.\d)")
 SECRET = re.compile(r"gh[pousr]_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{40,}|xox[baprs]-[A-Za-z0-9-]{20,}|AKIA[A-Z0-9]{16}|-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----")
 SENSITIVE = re.compile(r"(?:^|/)(?:creds\.json|credentials\.json|app-state-sync-key[^/]*|session\.(?:json|db)|\.env|id_rsa|id_ed25519)$", re.I)
@@ -58,7 +58,7 @@ def text_categories(text: str) -> set[str]:
         parts = token.split("@")
         for local, domain in zip(parts, parts[1:]):
             domain = domain.lower().rstrip(".")
-            if local and re.fullmatch(r"[A-Za-z0-9.\-]+\.[A-Za-z]{2,}", domain):
+            if local and re.fullmatch(r"[\w.\-]+\.[^\W\d_]{2,}", domain, re.UNICODE):
                 if domain not in {"example.com", "example.org", "example.net", "users.noreply.github.com", "noreply.github.com"} and not domain.endswith(".invalid"):
                     found.add("email")
     if any(not fictional_phone(m[0]) for m in PHONE.finditer(text)):
