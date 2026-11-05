@@ -18,3 +18,11 @@ value-free wrapper, never use `--inventory` or echo arbitrary findings in public
 CI. No action/workflow consumer rollout is included in the bootstrap.
 
 See [design](docs/DESIGN.md) and [contributing](CONTRIBUTING.md).
+
+## Privacy gate pilot
+
+`python3 -I tools/privacy_scan.py --root /path/to/checkout` runs a bounded,
+offline, counts-only tracked-text pattern check. CI runs it on this repository.
+It does not certify privacy or inspect binary/PDF/image contents. Consumer rollout
+requires a separately reviewed pinned action and shadow pilot, not copy-pasted
+inline grep. See [scope, limits and exit codes](docs/PRIVACY_SCAN.md).

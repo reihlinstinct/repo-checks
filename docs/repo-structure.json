@@ -1,0 +1,63 @@
+{
+  "root_files": [
+    "README.md",
+    "LICENSE",
+    "SECURITY.md",
+    "CONTRIBUTING.md",
+    "CODE_OF_CONDUCT.md",
+    ".gitignore"
+  ],
+  "directories": {
+    ".github": [
+      ".yml",
+      ".yaml",
+      ".md"
+    ],
+    "src": [
+      ".py"
+    ],
+    "tests": [
+      ".py"
+    ],
+    "actions": [
+      ".py",
+      ".yml"
+    ],
+    "tools": [
+      ".py"
+    ],
+    "docs": [
+      ".md",
+      ".json"
+    ]
+  },
+  "required_root_files": [
+    "README.md",
+    "LICENSE",
+    "SECURITY.md",
+    "CONTRIBUTING.md",
+    "CODE_OF_CONDUCT.md",
+    ".gitignore"
+  ],
+  "forbidden_paths": [
+    ".env",
+    "creds.json"
+  ],
+  "required_by_directory": {
+    "src": [
+      "repo_checks/privacy.py",
+      "repo_checks/inputs.py"
+    ],
+    "tools": [
+      "privacy_scan.py",
+      "check_structure.py"
+    ],
+    "docs": [
+      "repo-structure.json"
+    ],
+    "tests": [
+      "security/test_privacy.py",
+      "security/test_structure.py"
+    ]
+  }
+}

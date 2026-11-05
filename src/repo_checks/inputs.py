@@ -116,7 +116,7 @@ class Inputs:
     def __exit__(self, *_):
         self.close()
 
-    def read(self, path: str, cap: int = MAX_FILE) -> str:
+    def read_bytes(self, path: str, cap: int = MAX_FILE) -> bytes:
         parts = valid_path(path)
         if self.fd is None or path not in self.paths or not 0 < cap <= MAX_FILE:
             raise InputError('untracked_or_closed')
@@ -147,7 +147,7 @@ class Inputs:
             if identity(before) != identity(after) or identity(after) != identity(linked):
                 raise InputError('file_changed')
             self.total += len(data)
-            return data.decode('utf-8', errors='strict')
+            return bytes(data)
         except InputError:
             raise
         except (OSError, UnicodeError):
@@ -156,3 +156,9 @@ class Inputs:
             if handle is not None:
                 os.close(handle)
             os.close(directory)
+
+    def read(self, path: str, cap: int = MAX_FILE) -> str:
+        try:
+            return self.read_bytes(path, cap).decode('utf-8', errors='strict')
+        except UnicodeError:
+            raise InputError('file_unavailable') from None
