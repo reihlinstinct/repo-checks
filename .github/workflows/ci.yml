@@ -15,5 +15,11 @@ jobs:
           persist-credentials: false
       - name: Synthetic regression suite
         run: python3 -m unittest discover -s tests/security -v
+      - name: Privacy scan (tracked text, counts only)
+        run: python3 -I src/repo_checks/privacy.py
+      - name: Privacy scope summary
+        if: always()
+        run: |
+          printf "%s\n" "## Privacy scan" "- Scanned tracked UTF8 text for phone/email/ID/secret patterns and sensitive filenames." "- Counts only, no finding values or paths in public logs." "- Binary files require separate review; this is not privacy certification." >> "$GITHUB_STEP_SUMMARY"
       - name: Check own workflow
         run: python3 src/repo_checks/scorecard.py
