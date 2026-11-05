@@ -13,13 +13,16 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
+      - name: Structure manifest enforcement
+        run: python3 -I tools/check_structure.py
       - name: Synthetic regression suite
         run: python3 -m unittest discover -s tests/security -v
       - name: Privacy scan (tracked text, counts only)
-        run: python3 -I src/repo_checks/privacy.py
+        id: privacy
+        run: python3 -I tools/privacy_scan.py
       - name: Privacy scope summary
         if: always()
         run: |
-          printf "%s\n" "## Privacy scan" "- Scanned tracked UTF8 text for phone/email/ID/secret patterns and sensitive filenames." "- Counts only, no finding values or paths in public logs." "- Binary files require separate review; this is not privacy certification." >> "$GITHUB_STEP_SUMMARY"
+          printf "%s\n" "## Privacy scan" "- Privacy step outcome: ${{ steps.privacy.outcome }} (success means tracked-text scan completed)." "- Counts only, no finding values or paths in public logs." "- Binary files require separate review; this is not privacy certification." >> "$GITHUB_STEP_SUMMARY"
       - name: Check own workflow
         run: python3 src/repo_checks/scorecard.py

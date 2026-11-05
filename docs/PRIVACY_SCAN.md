@@ -14,7 +14,7 @@ phone forms and NANPA +1-NPA-555-0100 through 0199 are fictional exceptions.
 Exceptions apply to individual matched tokens, never whole lines or directories.
 Fixtures assemble non-reserved shapes at runtime; they contain no real identifiers.
 
-Limits: 30,000 tracked files, 2 MiB per file, 32 MiB total, 20-second Git listing.
+Limits: 20,000 tracked files, 2 MiB per file, 32 MiB total, 10-second Git listing with capped streaming output; 15-second scan deadline and 30-second CLI alarm.
 Binary/non-UTF8 files are counted as unscanned. PDFs, images, OCR, compressed
 archives, encoded secrets, personal names and arbitrary secrets require separate
 review. Pattern matches can be public official contacts, synthetic test data,

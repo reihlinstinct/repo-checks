@@ -1,0 +1,4 @@
+{
+  "root_files": ["README.md", "LICENSE", "SECURITY.md", "CONTRIBUTING.md", "CODE_OF_CONDUCT.md", ".gitignore"],
+  "directories": {".github": [".yml", ".yaml", ".md"], "src": [".py"], "tests": [".py"], "actions": [".py", ".yml"], "tools": [".py"], "docs": [".md", ".json"]}
+}

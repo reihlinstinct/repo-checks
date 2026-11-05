@@ -10,15 +10,17 @@ import argparse
 import json
 import re
 import subprocess
+import time
+import signal
+import sys
+from repo_checks.inputs import Inputs, InputError, git_output, MAX_FILE, MAX_TOTAL, MAX_PATHS
 from pathlib import Path
 
 VERSION = 1
-MAX_FILE = 2 * 1024 * 1024
-MAX_TOTAL = 32 * 1024 * 1024
-MAX_FILES = 30000
-EMAIL = re.compile(r"(?<![\w@])([A-Za-z0-9._%+\-]+)@([A-Za-z0-9.\-]+\.[A-Za-z]{2,})(?![\w@])")
-PHONE = re.compile(r"(?<![\w+])(?:\+\d(?:[ .()-]?\d){7,14}|00\d(?:[ .()-]?\d){7,14}|0[2-9](?:[ .()-]?\d){7,8})(?!\w)")
-ID = re.compile(r"(?<![\w.\-])\d{9}(?![\w.\-])")
+MAX_FILES = MAX_PATHS
+EMAIL_CANDIDATE = re.compile(r"[A-Za-z0-9._%+@\-]+")
+PHONE = re.compile(r"(?<![\w+])(?:\+\d(?:[ .()-]{0,3}\d){7,14}\)?|00\d(?:[ .()-]{0,3}\d){7,14}\)?|\(?0[2-9](?:[ .()-]{0,3}\d){7,8}\)?)(?!\w)")
+ID = re.compile(r"(?<![\w.\-])\d{9}(?![\w\-]|\.\d)")
 SECRET = re.compile(r"gh[pousr]_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{40,}|xox[baprs]-[A-Za-z0-9-]{20,}|AKIA[A-Z0-9]{16}|-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----")
 SENSITIVE = re.compile(r"(?:^|/)(?:creds\.json|credentials\.json|app-state-sync-key[^/]*|session\.(?:json|db)|\.env|id_rsa|id_ed25519)$", re.I)
 CATEGORIES = ("email", "phone", "id", "secret", "sensitive_filename")
@@ -47,10 +49,18 @@ def fictional_phone(value: str) -> bool:
 def text_categories(text: str) -> set[str]:
     """Return category labels only. Exempt exact safe tokens, never whole lines."""
     found = set()
-    for match in EMAIL.finditer(text):
-        domain = match[2].lower()
-        if domain not in {"example.com", "example.org", "example.net", "users.noreply.github.com", "noreply.github.com"} and not domain.endswith(".invalid"):
-            found.add("email")
+    for candidate in EMAIL_CANDIDATE.finditer(text):
+        token = candidate[0]
+        if "@" not in token:
+            continue
+        if len(token) > 320:
+            raise ScanError()
+        parts = token.split("@")
+        for local, domain in zip(parts, parts[1:]):
+            domain = domain.lower().rstrip(".")
+            if local and re.fullmatch(r"[A-Za-z0-9.\-]+\.[A-Za-z]{2,}", domain):
+                if domain not in {"example.com", "example.org", "example.net", "users.noreply.github.com", "noreply.github.com"} and not domain.endswith(".invalid"):
+                    found.add("email")
     if any(not fictional_phone(m[0]) for m in PHONE.finditer(text)):
         found.add("phone")
     if any(checksum(m[0]) for m in ID.finditer(text)):
@@ -62,56 +72,55 @@ def text_categories(text: str) -> set[str]:
 
 def scan(root: Path) -> dict:
     """Read bounded Git-tracked regular UTF8 text, without following symlinks."""
-    root = root.resolve(strict=True)
-    proc = subprocess.run(["git", "-C", str(root), "ls-files", "--stage", "-z"], capture_output=True, timeout=20, check=False)
-    if proc.returncode:
-        raise ScanError()
-    entries = [e for e in proc.stdout.split(b"\0") if e]
-    if len(entries) > MAX_FILES:
-        raise ScanError()
+    deadline = time.monotonic() + 15
     counts = {key: 0 for key in CATEGORIES}
-    text_files = binary_files = total = 0
-    for entry in entries:
-        metadata, raw_name = entry.split(b"\t", 1)
-        mode, _, stage = metadata.split()
-        if mode not in (b"100644", b"100755") or stage != b"0":
-            raise ScanError()  # symlinks, submodules and unresolved entries fail closed
-        name = raw_name.decode("utf-8", errors="strict")
-        path = root / name
-        if path.is_symlink() or not path.resolve(strict=True).is_relative_to(root):
-            raise ScanError()
-        if path.stat().st_size > MAX_FILE:
-            raise ScanError()
-        data = path.read_bytes()
-        total += len(data)
-        if len(data) > MAX_FILE or total > MAX_TOTAL:
-            raise ScanError()
-        found = {"sensitive_filename"} if SENSITIVE.search(name) else set()
-        if b"\0" in data:
-            binary_files += 1
-        else:
-            try:
-                text = data.decode("utf-8")
-            except UnicodeDecodeError:
+    text_files = binary_files = 0
+    with Inputs(root) as inputs:
+        staged = git_output(root, ["ls-files", "--stage", "-z"])
+        for entry in staged.split(b"\0"):
+            if not entry:
+                continue
+            metadata, _ = entry.split(b"\t", 1)
+            mode, _, stage = metadata.split()
+            if mode not in (b"100644", b"100755") or stage != b"0":
+                raise ScanError()
+        for name in sorted(inputs.paths):
+            if time.monotonic() > deadline:
+                raise ScanError()
+            data = inputs.read_bytes(name)
+            found = {"sensitive_filename"} if SENSITIVE.search(name) else set()
+            if b"\0" in data:
                 binary_files += 1
             else:
-                text_files += 1
-                found.update(text_categories(text))
-        for category in found:
-            counts[category] += 1
+                try:
+                    text = data.decode("utf-8")
+                except UnicodeDecodeError:
+                    binary_files += 1
+                else:
+                    text_files += 1
+                    found.update(text_categories(text))
+            for category in found:
+                counts[category] += 1
     return {"schema_version": VERSION, "status": "findings" if any(counts.values()) else "pass", "counts": counts, "text_files": text_files, "binary_files_unscanned": binary_files}
 
 
 def main() -> int:
     """Emit one fixed-schema counts-only result; errors never echo input."""
-    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    class Parser(argparse.ArgumentParser):
+        def error(self, message):
+            raise ScanError()
+    parser = Parser(add_help=False)
     parser.add_argument("--root", default=".")
-    args = parser.parse_args()
     try:
+        args = parser.parse_args()
+        signal.signal(signal.SIGALRM, lambda *_: (_ for _ in ()).throw(ScanError()))
+        signal.alarm(30)
         result = scan(Path(args.root))
-    except (OSError, ValueError, subprocess.SubprocessError, ScanError):
+    except (OSError, ValueError, subprocess.SubprocessError, InputError, ScanError):
         print(json.dumps({"schema_version": VERSION, "status": "error"}))
         return 2
+    finally:
+        signal.alarm(0)
     print(json.dumps(result, sort_keys=True))
     return 1 if result["status"] == "findings" else 0
 

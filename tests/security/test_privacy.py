@@ -8,6 +8,8 @@ import tempfile
 import unittest
 
 MODULE = Path(__file__).resolve().parents[2] / 'src/repo_checks/privacy.py'
+import sys
+sys.path.insert(0, str(MODULE.parents[1]))
 spec = importlib.util.spec_from_file_location('privacy', MODULE)
 p = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(p)
@@ -42,7 +44,7 @@ class PrivacyTests(unittest.TestCase):
         return root
 
     def run_cli(self, root):
-        return subprocess.run(['python3', '-I', str(MODULE), '--root', str(root)], text=True, capture_output=True)
+        return subprocess.run(['python3', '-I', str(MODULE.parents[2] / 'tools/privacy_scan.py'), '--root', str(root)], text=True, capture_output=True)
 
     def test_tracked_only_and_no_value_output(self):
         with tempfile.TemporaryDirectory() as d:
@@ -88,6 +90,82 @@ class PrivacyTests(unittest.TestCase):
             (root / 'clean.md').write_text('synthetic@example.invalid +1-202-555-0100')
             subprocess.run(['git', '-C', str(root), 'add', '.'], check=True)
             self.assertEqual(0, self.run_cli(root).returncode)
+
+
+
+class HardenedPrivacyTests(PrivacyTests):
+    def test_parentheses_and_id_punctuation(self):
+        for value in ['+972 (50) ' + '123-4567', '(050) ' + '123-4567']:
+            self.assertIn('phone', p.text_categories(value))
+        prefix = '345' + '67890'
+        value = next(prefix + str(n) for n in range(10) if p.checksum(prefix + str(n)))
+        self.assertIn('id', p.text_categories('ID: ' + value + '.'))
+        self.assertNotIn('id', p.text_categories('1.' + value))
+        self.assertNotIn('id', p.text_categories(value + '.123'))
+
+    def test_every_secret_family(self):
+        samples = ['gh' + k + '_' + 'X' * 36 for k in 'pousr']
+        samples += ['github_' + 'pat_' + 'Y' * 50, 'AK' + 'IA' + 'Z' * 16]
+        samples += ['xox' + k + '-' + 'Z' * 24 for k in 'baprs']
+        samples += ['-----BEGIN ' + k + 'PRIVATE KEY-----' for k in ['', 'RSA ', 'EC ', 'OPENSSH ']]
+        for value in samples:
+            self.assertIn('secret', p.text_categories(value))
+        for value in ['ghp_short', 'AKIAshort', 'xoxb-short', 'BEGIN PUBLIC KEY']:
+            self.assertNotIn('secret', p.text_categories(value))
+
+    def test_adversarial_runtime(self):
+        import time
+        start = time.monotonic()
+        for char in ['.', '-', '@', '9']:
+            try:
+                p.text_categories(char * 100000)
+            except p.ScanError:
+                pass
+        self.assertLess(time.monotonic() - start, 1.5)
+
+    def test_malformed_arguments_value_free(self):
+        result = subprocess.run(['python3', '-I', str(MODULE.parents[2] / 'tools/privacy_scan.py'), '--SYNTHETIC_PRIVATE_ARGUMENT'], capture_output=True, text=True)
+        self.assertEqual(2, result.returncode)
+        self.assertEqual('', result.stderr)
+        self.assertNotIn('SYNTHETIC_PRIVATE_ARGUMENT', result.stdout)
+
+    def test_fifo_ancestor_symlink_and_missing(self):
+        for kind in ['fifo', 'ancestor', 'missing']:
+            with tempfile.TemporaryDirectory() as d:
+                root = self.make_repo(d)
+                (root/'docs').mkdir(); target = root/'docs/item'; target.write_text('safe')
+                subprocess.run(['git','-C',str(root),'add','.'],check=True)
+                target.unlink()
+                if kind == 'fifo': os.mkfifo(target)
+                elif kind == 'ancestor':
+                    (root/'docs').rmdir(); (root/'other').mkdir(); (root/'other/item').write_text('safe'); (root/'docs').symlink_to(root/'other')
+                self.assertEqual(2,self.run_cli(root).returncode)
+
+    def test_submodule_unmerged_inventory(self):
+        from unittest.mock import patch
+        for entry in [b'160000 ' + b'a'*40 + b' 0\tmodule\0', b'100644 ' + b'a'*40 + b' 2\tfile\0']:
+            with tempfile.TemporaryDirectory() as d:
+                root=self.make_repo(d)
+                with patch.object(p,'git_output',return_value=entry), self.assertRaises(p.ScanError): p.scan(root)
+
+    def test_candidate_fsmonitor_and_git_env_do_not_execute(self):
+        from unittest.mock import patch
+        with tempfile.TemporaryDirectory() as d:
+            root=self.make_repo(d);(root/'item').write_text('safe')
+            subprocess.run(['git','-C',str(root),'add','.'],check=True)
+            marker=root/'EXECUTED';helper=root/'helper'
+            helper.write_text('#!/bin/sh\ntouch '+str(marker)+'\n');helper.chmod(0o700)
+            subprocess.run(['git','-C',str(root),'config','core.fsmonitor',str(helper)],check=True)
+            with patch.dict(os.environ, {'GIT_CONFIG_COUNT':'1','GIT_CONFIG_KEY_0':'core.fsmonitor','GIT_CONFIG_VALUE_0':str(helper),'GIT_DIR':'/not-a-repository'}):
+                self.assertEqual(0,self.run_cli(root).returncode)
+            self.assertFalse(marker.exists())
+
+    def test_scan_deadline(self):
+        from unittest.mock import patch, MagicMock
+        boundary = MagicMock()
+        boundary.__enter__.return_value.paths = ['item']
+        with patch.object(p, 'Inputs', return_value=boundary), patch.object(p, 'git_output', return_value=b''), patch.object(p.time, 'monotonic', side_effect=[0, 100]), self.assertRaises(p.ScanError):
+            p.scan(Path('.'))
 
 
 if __name__ == '__main__':
