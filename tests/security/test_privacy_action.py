@@ -12,6 +12,7 @@ from contextlib import redirect_stdout
 from unittest.mock import patch
 
 ROOT=Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT/'src'))
 BOOT=ROOT/'actions/privacy/bootstrap.py'
 spec=importlib.util.spec_from_file_location('privacy_boot',BOOT)
 a=importlib.util.module_from_spec(spec);spec.loader.exec_module(a)
