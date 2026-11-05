@@ -104,7 +104,7 @@ def scan(root: Path) -> dict:
     return {"schema_version": VERSION, "status": "findings" if any(counts.values()) else "pass", "counts": counts, "text_files": text_files, "binary_files_unscanned": binary_files}
 
 
-def main() -> int:
+def main(argv=None) -> int:
     """Emit one fixed-schema counts-only result; errors never echo input."""
     class Parser(argparse.ArgumentParser):
         def error(self, message):
@@ -112,7 +112,7 @@ def main() -> int:
     parser = Parser(add_help=False)
     parser.add_argument("--root", default=".")
     try:
-        args = parser.parse_args()
+        args = parser.parse_args(argv)
         signal.signal(signal.SIGALRM, lambda *_: (_ for _ in ()).throw(ScanError()))
         signal.alarm(30)
         result = scan(Path(args.root))
