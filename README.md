@@ -26,3 +26,7 @@ offline, counts-only tracked-text pattern check. CI runs it on this repository.
 It does not certify privacy or inspect binary/PDF/image contents. Consumer rollout
 requires a separately reviewed pinned action and shadow pilot, not copy-pasted
 inline grep. See [scope, limits and exit codes](docs/PRIVACY_SCAN.md).
+
+The [isolated privacy action](docs/PRIVACY_ACTION.md) is the consumer boundary.
+Pin the reviewed action commit, retain existing guards during the first shadow
+pilot, and do not treat mocked/local tests as real consumer proof.
