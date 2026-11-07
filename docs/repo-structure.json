@@ -5,7 +5,8 @@
     "SECURITY.md",
     "CONTRIBUTING.md",
     "CODE_OF_CONDUCT.md",
-    ".gitignore"
+    ".gitignore",
+    ".repo-layout.yml"
   ],
   "directories": {
     ".github": [
