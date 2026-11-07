@@ -12,3 +12,7 @@ normal signed squash merge, no bypass. Do not claim skipped tests ran.
 
 Consumer pins use full immutable commit SHAs. No mutable nested actions, remote
 script execution, runtime dependencies or privileged untrusted-PR execution.
+
+## File placement (enforced)
+
+Decide where a file lives BEFORE creating it. The contract in `.repo-layout.yml` lists the allowed top-level directories, the file types permitted in each, and the required community-standards files; `python tools/check_repo_layout.py` enforces it in CI. A new kind of file means updating the contract in the same PR.
