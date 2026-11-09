@@ -12,6 +12,10 @@ inputs:
     description: Line count above which section headers are required (50..max-lines).
     required: false
     default: "250"
+  max-lines-test:
+    description: File-size cap for test files (>= max-lines).
+    required: false
+    default: "600"
   exclude:
     description: Comma-separated extra glob exclusions (generated or vendored paths).
     required: false
@@ -30,5 +34,6 @@ runs:
         CHECK_MAX_LINES: ${{ inputs.max-lines }}
         CHECK_HEADER_THRESHOLD: ${{ inputs.header-threshold }}
         CHECK_EXCLUDE: ${{ inputs.exclude }}
+        CHECK_MAX_LINES_TEST: ${{ inputs.max-lines-test }}
         TRUSTED_ACTION: ${{ github.action_path }}
       run: python3 -I "$TRUSTED_ACTION/bootstrap.py"

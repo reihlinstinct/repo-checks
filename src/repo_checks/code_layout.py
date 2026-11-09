@@ -23,7 +23,8 @@ SOURCE_EXTENSIONS = (".py", ".js", ".jsx", ".ts", ".tsx", ".kt", ".kts",
 DEFAULT_EXCLUDES = ("vendor/*", "third_party/*", "node_modules/*",
                     "generated/*", "*.min.js", "package-lock.json",
                     "Podfile.lock", "Pods/*")
-HEADER = re.compile(r"^\s*(?:#|//)\s*Section:\s*\S", re.IGNORECASE)
+HEADER = re.compile(r"^\s*(?:#|//)\s*Section:\s*\S", re.IGNORECASE | re.MULTILINE)
+TEST_PATH = re.compile(r"(^|/)(tests?|__tests__)/|(^|/)(test_|spec_)|(_test|_spec|\.test|\.spec)\.\w+\Z", re.IGNORECASE)
 RULES = ("file_too_long", "missing_section_headers")
 MAX_FINDINGS = 200
 MIN_LIMIT = 50
@@ -41,9 +42,9 @@ def _excluded(path: str, patterns: list[str]) -> bool:
 
 
 def scan(root: Path, max_lines: int = 400, header_threshold: int = 250,
-         extra_excludes: tuple[str, ...] = ()) -> dict:
+         extra_excludes: tuple[str, ...] = (), max_lines_test: int = 600) -> dict:
     """Read bounded Git-tracked source files, without following symlinks."""
-    if not MIN_LIMIT <= header_threshold < max_lines <= MAX_LIMIT:
+    if not MIN_LIMIT <= header_threshold < max_lines <= MAX_LIMIT or not max_lines <= max_lines_test <= MAX_LIMIT:
         raise ScanError()
     patterns = list(DEFAULT_EXCLUDES) + list(extra_excludes)
     deadline = time.monotonic() + 15
@@ -69,7 +70,8 @@ def scan(root: Path, max_lines: int = 400, header_threshold: int = 250,
                 continue
             scanned += 1
             lines = text.count("\n") + (0 if text.endswith("\n") or not text else 1)
-            if lines > max_lines and len(findings) < MAX_FINDINGS:
+            cap = max_lines_test if TEST_PATH.search(name) else max_lines
+            if lines > cap and len(findings) < MAX_FINDINGS:
                 findings.append({"path": name, "rule": "file_too_long", "lines": lines})
             if lines > header_threshold and not HEADER.search(text) and len(findings) < MAX_FINDINGS:
                 findings.append({"path": name, "rule": "missing_section_headers", "lines": lines})
@@ -77,6 +79,7 @@ def scan(root: Path, max_lines: int = 400, header_threshold: int = 250,
     return {"schema_version": VERSION,
             "status": "findings" if findings else "pass",
             "max_lines": max_lines,
+            "max_lines_test": max_lines_test,
             "header_threshold": header_threshold,
             "files_scanned": scanned,
             "files_excluded": skipped,
@@ -94,15 +97,17 @@ def main(argv=None) -> int:
     parser.add_argument("--max-lines", default="400")
     parser.add_argument("--header-threshold", default="250")
     parser.add_argument("--exclude", default="")
+    parser.add_argument("--max-lines-test", default="600")
     try:
         args = parser.parse_args(argv)
         max_lines = int(args.max_lines)
         header_threshold = int(args.header_threshold)
+        max_lines_test = int(args.max_lines_test)
         extra = tuple(p for p in (x.strip() for x in args.exclude.split(","))
                       if p and len(p) <= 200 and re.fullmatch(r"[\w./?*\-]+", p))[:50]
         signal.signal(signal.SIGALRM, lambda *_: (_ for _ in ()).throw(ScanError()))
         signal.alarm(30)
-        result = scan(Path(args.root), max_lines, header_threshold, extra)
+        result = scan(Path(args.root), max_lines, header_threshold, extra, max_lines_test)
     except (OSError, ValueError, subprocess.SubprocessError, InputError, ScanError):
         print(json.dumps({"schema_version": VERSION, "status": "error"}))
         return 2

@@ -93,11 +93,37 @@ class SchemaTests(unittest.TestCase):
         with make_repo({'big.py': body(450), 'ok.py': 'y\n'}) as tmp:
             result = code_layout.scan(Path(tmp))
         self.assertEqual(set(result), {'schema_version', 'status', 'max_lines',
-                                       'header_threshold', 'files_scanned',
-                                       'files_excluded', 'counts', 'findings'})
+                                       'max_lines_test', 'header_threshold',
+                                       'files_scanned', 'files_excluded',
+                                       'counts', 'findings'})
         self.assertEqual(result['schema_version'], 1)
         json.dumps(result)
 
 
 if __name__ == '__main__':
     unittest.main()
+
+class RegressionAndPolicyTests(unittest.TestCase):
+    def test_header_below_first_line_counts(self):
+        # Regression: a section header after docstring/imports must be found.
+        text = '"""Module docstring."""\nimport os\n\n# Section: API\n' + body(260)
+        with make_repo({'mod.py': text}) as tmp:
+            result = code_layout.scan(Path(tmp), max_lines=400, header_threshold=250)
+        self.assertEqual(result['counts']['missing_section_headers'], 0)
+
+    def test_test_files_use_higher_cap(self):
+        with make_repo({'tests/test_big.py': body(500)}) as tmp:
+            result = code_layout.scan(Path(tmp), max_lines=400, max_lines_test=600)
+        self.assertEqual(result['counts']['file_too_long'], 0)
+        # but headers still required above the threshold
+        self.assertEqual(result['counts']['missing_section_headers'], 1)
+
+    def test_test_cap_still_enforced(self):
+        with make_repo({'tests/test_big.py': body(650)}) as tmp:
+            result = code_layout.scan(Path(tmp), max_lines=400, max_lines_test=600)
+        self.assertEqual(result['counts']['file_too_long'], 1)
+
+    def test_source_cap_unchanged_by_test_cap(self):
+        with make_repo({'src/big.py': body(450)}) as tmp:
+            result = code_layout.scan(Path(tmp), max_lines=400, max_lines_test=600)
+        self.assertEqual(result['counts']['file_too_long'], 1)

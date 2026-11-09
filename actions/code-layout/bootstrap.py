@@ -20,17 +20,19 @@ def validate(value, code):
         if value != {"schema_version": 1, "status": "error"}:
             raise ValueError()
         return json.dumps(value, sort_keys=True, separators=(",", ":"))
-    keys = {"schema_version", "status", "max_lines", "header_threshold",
+    keys = {"schema_version", "status", "max_lines", "max_lines_test", "header_threshold",
             "files_scanned", "files_excluded", "counts", "findings"}
     if set(value) != keys:
         raise ValueError()
     if value["schema_version"] != 1 or value["status"] != {0: "pass", 1: "findings"}[code]:
         raise ValueError()
-    numbers = [value["max_lines"], value["header_threshold"],
+    numbers = [value["max_lines"], value["max_lines_test"], value["header_threshold"],
                value["files_scanned"], value["files_excluded"]]
     if any(type(n) is not int or not 0 <= n <= 20000 for n in numbers):
         raise ValueError()
     if not 50 <= value["header_threshold"] < value["max_lines"] <= 10000:
+        raise ValueError()
+    if not value["max_lines"] <= value["max_lines_test"] <= 10000:
         raise ValueError()
     counts = value["counts"]
     if not isinstance(counts, dict) or set(counts) != set(RULES):
@@ -90,6 +92,7 @@ def main():
         root = safe_root(os.environ["CHECK_ROOT"], workspace, action)
         max_lines = _limit("CHECK_MAX_LINES", 50, 10000)
         threshold = _limit("CHECK_HEADER_THRESHOLD", 50, 9999)
+        test_cap = _limit("CHECK_MAX_LINES_TEST", 50, 10000)
         source = action.parents[1] / "src"
         if source.is_symlink() or not source.is_dir() or source.resolve() != source:
             raise ValueError()
@@ -101,6 +104,7 @@ def main():
             code = check(["--root=" + str(root),
                           "--max-lines=" + str(max_lines),
                           "--header-threshold=" + str(threshold),
+                          "--max-lines-test=" + str(test_cap),
                           "--exclude=" + _exclude()])
         text = output.getvalue()
         if len(text) > 65536:
