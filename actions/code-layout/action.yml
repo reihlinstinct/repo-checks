@@ -1,0 +1,34 @@
+name: Bounded code-layout check
+description: In-file layout standard enforcement - size cap and section headers, from pinned trusted code.
+inputs:
+  checkout-root:
+    description: Absolute caller checkout path within GITHUB_WORKSPACE.
+    required: true
+  max-lines:
+    description: File-size cap in lines (50-10000).
+    required: false
+    default: "400"
+  header-threshold:
+    description: Line count above which section headers are required (50..max-lines).
+    required: false
+    default: "250"
+  exclude:
+    description: Comma-separated extra glob exclusions (generated or vendored paths).
+    required: false
+    default: ""
+outputs:
+  result:
+    description: Validated fixed-schema layout result with safe paths, no file content.
+    value: ${{ steps.check.outputs.result }}
+runs:
+  using: composite
+  steps:
+    - id: check
+      shell: bash
+      env:
+        CHECK_ROOT: ${{ inputs.checkout-root }}
+        CHECK_MAX_LINES: ${{ inputs.max-lines }}
+        CHECK_HEADER_THRESHOLD: ${{ inputs.header-threshold }}
+        CHECK_EXCLUDE: ${{ inputs.exclude }}
+        TRUSTED_ACTION: ${{ github.action_path }}
+      run: python3 -I "$TRUSTED_ACTION/bootstrap.py"
