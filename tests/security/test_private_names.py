@@ -46,6 +46,15 @@ class PrivateNameTests(unittest.TestCase):
             command = [sys.executable, '-I', str(ROOT / 'tools/private_name_scan.py'), '--root', str(self.root)]
         return subprocess.run(command, env=env, cwd=self.root, capture_output=True, text=True)
 
+    def test_generic_uuid_token_is_not_phone_but_adjacent_pii_is(self):
+        uuid = '00000000-0000-4000-8000-000000000102'
+        self.assertEqual(set(), privacy.text_categories(uuid))
+        self.assertIn('phone', privacy.text_categories(uuid + ' +972501234567'))
+        self.assertIn('id', privacy.text_categories(uuid + ' 000000018'))
+        self.assertIn('email', privacy.text_categories(uuid + ' zz@zz-domain.test'))
+        self.assertIn('phone', privacy.text_categories('000000000102'))
+        self.assertIn('phone', privacy.text_categories('ZZ' + uuid))
+
     def test_normalized_boundaries_not_substrings(self):
         pattern = names.load_policy(self.policy)
         for text in ['zzalpha', 'ZZSURNAME.', '(זזבדיקה)', 'ＺＺＡｌｐｈａ', 'ZZFull ZZName']:
