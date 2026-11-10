@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "findings": [
+    {
+      "path": ".github/workflows/private-name-guard.yml",
+      "rule": "job-write",
+      "scope": "report",
+      "evidence": "statuses: write",
+      "issue": "https://github.com/reihlinstinct/repo-checks/issues/25",
+      "reason": "Intended exact-head reporting only. This separate job has no checkout or policy secret; it posts fixed pass/fail status to the validated scanned SHA. The scanner job retains contents:read."
+    }
+  ]
+}

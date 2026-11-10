@@ -103,3 +103,7 @@ A failed source request or any failed/skipped/cancelled scan posts failure, neve
 success. The head status context is exactly `private-name-guard`; require it in
 branch settings only after verifying installation on the default branch.
 Environment restrictions do not establish branch-required checks by themselves.
+
+The own-repository Scorecard baseline names only the intended report-job
+`statuses: write` capability with issue and reason. It is not a name-policy or
+privacy waiver. Changed capabilities, jobs or evidence invalidate that baseline.
