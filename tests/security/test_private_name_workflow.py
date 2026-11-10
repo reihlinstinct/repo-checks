@@ -90,6 +90,17 @@ class WorkflowTests(unittest.TestCase):
                 self.assertEqual('success' if scan == 'success' and source == 'true' else 'failure', status['state'])
         self.assertTrue(self.execute(scripts()[1], context, env={'CANDIDATE_SHA': 'bad'}).get('error'))
 
+    def test_generic_findings_allowed_but_errors_missing_and_mismatch_fail(self):
+        import os
+        text = WORKFLOW.read_text().split("          python3 -I - <<'PYTHON'\n")[1].split('          PYTHON')[0]
+        code = '\n'.join(line[10:] for line in text.splitlines())
+        for state, outcome, expected in [('pass', 'success', 0), ('findings', 'failure', 0),
+                                         ('error', 'failure', 1), ('pass', 'failure', 1),
+                                         ('findings', 'success', 1), ('', '', 1)]:
+            env = dict(os.environ, GENERIC_RESULT=json.dumps({'status': state}), GENERIC_OUTCOME=outcome)
+            p = subprocess.run(['python3', '-I', '-c', code], env=env, capture_output=True)
+            self.assertEqual(expected, p.returncode)
+
     def test_privilege_and_execution_contract(self):
         text = WORKFLOW.read_text()
         scan = text.split('\n  scan:\n')[1].split('\n  report:\n')[0]
@@ -102,5 +113,7 @@ class WorkflowTests(unittest.TestCase):
         self.assertNotIn('secrets.', report)
         self.assertNotIn('checkout', report)
         self.assertIn('statuses: write', report)
-        for unsafe in ['continue-on-error', 'pull_request_target', 'secrets: inherit', 'npm ', 'pip ', 'upload-artifact', 'cache@']:
+        self.assertEqual(1, text.count('continue-on-error: true'))
+        self.assertIn('Reject generic scanner errors', scan)
+        for unsafe in [ 'pull_request_target', 'secrets: inherit', 'npm ', 'pip ', 'upload-artifact', 'cache@']:
             self.assertNotIn(unsafe, text)

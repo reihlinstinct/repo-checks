@@ -99,6 +99,11 @@ The binding job re-reads the original workflow run through GitHub and requires
 the expected request path, event, completed state, repository ID, source head
 repository ID, immutable head SHA and conclusion to agree with the wake payload.
 No candidate text is interpolated into executable JavaScript or shell source.
+Names are mandatory. Generic pattern findings remain counts-only/non-blocking
+while synthetic valid-format fixture semantics are unresolved. The generic
+step alone captures its exit; the next trusted step accepts only a validated
+pass/findings result with matching outcome. Generic errors/missing output still
+fail, as do any failed/skipped/cancelled names scans.
 A failed source request or any failed/skipped/cancelled scan posts failure, never
 success. The head status context is exactly `private-name-guard`; require it in
 branch settings only after verifying installation on the default branch.
@@ -107,3 +112,7 @@ Environment restrictions do not establish branch-required checks by themselves.
 The own-repository Scorecard baseline names only the intended report-job
 `statuses: write` capability with issue and reason. It is not a name-policy or
 privacy waiver. Changed capabilities, jobs or evidence invalidate that baseline.
+
+The generic scanner excludes only complete canonical UUID tokens from numeric
+phone/ID matching. Adjacent data and other categories are still checked. This
+is typed-token parsing, not a whole-line exemption or fixture baseline.

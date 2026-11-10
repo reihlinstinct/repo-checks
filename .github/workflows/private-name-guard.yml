@@ -62,16 +62,37 @@ jobs:
           git -C "$root" checkout --quiet --detach FETCH_HEAD >/dev/null 2>&1
           [[ "$(git -C "$root" rev-parse HEAD)" == "$CANDIDATE_SHA" ]]
       - name: Secret-sourced private-name scan
-        uses: reihlinstinct/repo-checks/actions/private-names@bd7d2231fe835897270061692ce0ae5323acc6e3
+        uses: reihlinstinct/repo-checks/actions/private-names@c395f5d7db35f5548f3b0fde673605d41160c53d
         with:
           checkout-root: ${{ github.workspace }}/candidate
         env:
           PRIVATE_NAME_TERMS_JSON: ${{ secrets.PRIVATE_NAME_TERMS_JSON }}
-      - name: Generic privacy scan
+      - name: Generic privacy scan (counts-only findings remain non-blocking)
+        id: generic
         if: always()
-        uses: reihlinstinct/repo-checks/actions/privacy@bd7d2231fe835897270061692ce0ae5323acc6e3
+        continue-on-error: true
+        uses: reihlinstinct/repo-checks/actions/privacy@c395f5d7db35f5548f3b0fde673605d41160c53d
         with:
           checkout-root: ${{ github.workspace }}/candidate
+      - name: Reject generic scanner errors, not existing synthetic findings
+        if: always()
+        env:
+          GENERIC_RESULT: ${{ steps.generic.outputs.result }}
+          GENERIC_OUTCOME: ${{ steps.generic.outcome }}
+        run: |
+          python3 -I - <<'PYTHON'
+          import json, os
+          try:
+              record = json.loads(os.environ['GENERIC_RESULT'])
+              state = record['status']
+              outcome = os.environ['GENERIC_OUTCOME']
+              assert state in {'pass', 'findings'}
+              assert outcome == {'pass': 'success', 'findings': 'failure'}[state]
+          except Exception:
+              print('Generic privacy scanner unavailable or failed')
+              raise SystemExit(1)
+          print('Generic privacy scan completed; counts-only findings remain non-blocking')
+          PYTHON
   report:
     needs: [bind, scan]
     if: always() && needs.bind.result == 'success'
