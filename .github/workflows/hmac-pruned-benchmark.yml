@@ -1,0 +1,24 @@
+name: Synthetic pruned HMAC benchmark
+on:
+  pull_request:
+    paths:
+      - src/repo_checks/hmac_pruned_benchmark.py
+      - src/repo_checks/hmac_benchmark.py
+      - tools/benchmark_pruned_hmac.py
+      - tests/security/test_hmac_pruned_benchmark.py
+      - .github/workflows/hmac-pruned-benchmark.yml
+permissions:
+  contents: read
+jobs:
+  pruned-benchmark:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - run: python3 -I tools/benchmark_pruned_hmac.py
+      - name: Scope summary
+        if: always()
+        run: |
+          printf '%s\n' '## Synthetic pruned HMAC benchmark' 'Complete synthetic passes with indexed pruning and repeated timings. Temporary file contains generated dummy bytes only. No policy or configuration changed; no production budgets selected.' >> "$GITHUB_STEP_SUMMARY"
