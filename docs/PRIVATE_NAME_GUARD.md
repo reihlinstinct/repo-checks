@@ -1,7 +1,8 @@
 # Secret-sourced name guard
 
 This prerequisite provides the scanner and action only. The trusted workflow
-will follow in a separate reviewed PR pinned to the landed scanner commit.
+is documented separately in [PRIVATE_NAME_WORKFLOW.md](PRIVATE_NAME_WORKFLOW.md)
+and pins the landed scanner commit.
 No consumer rollout or branch-required status is installed by this change.
 
 Policy is a mandatory JSON array in PRIVATE_NAME_TERMS_JSON, stored only in an
