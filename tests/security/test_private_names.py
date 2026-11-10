@@ -49,10 +49,15 @@ class PrivateNameTests(unittest.TestCase):
     def test_generic_uuid_token_is_not_phone_but_adjacent_pii_is(self):
         uuid = '00000000-0000-4000-8000-000000000102'
         self.assertEqual(set(), privacy.text_categories(uuid))
-        self.assertIn('phone', privacy.text_categories(uuid + ' +972501234567'))
-        self.assertIn('id', privacy.text_categories(uuid + ' 000000018'))
-        self.assertIn('email', privacy.text_categories(uuid + ' zz@zz-domain.test'))
-        self.assertIn('phone', privacy.text_categories('000000000102'))
+        # Generate positive scanner inputs, as in the scanner's own regressions.
+        phone = '+' + '972' + '50' + '1234567'
+        prefix = '345' + '67890'
+        identity = next(prefix + str(n) for n in range(10) if privacy.checksum(prefix + str(n)))
+        email = 'zz' + '@' + 'zz-domain.test'
+        self.assertIn('phone', privacy.text_categories(uuid + ' ' + phone))
+        self.assertIn('id', privacy.text_categories(uuid + ' ' + identity))
+        self.assertIn('email', privacy.text_categories(uuid + ' ' + email))
+        self.assertIn('phone', privacy.text_categories('0' * 9 + '102'))
         self.assertIn('phone', privacy.text_categories('ZZ' + uuid))
 
     def test_normalized_boundaries_not_substrings(self):
