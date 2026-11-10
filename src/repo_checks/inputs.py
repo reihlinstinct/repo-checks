@@ -116,7 +116,7 @@ class Inputs:
     def __exit__(self, *_):
         self.close()
 
-    def read_bytes(self, path: str, cap: int = MAX_FILE, *, binary_aware: bool = False) -> bytes | None:
+    def read_bytes(self, path: str, cap: int = MAX_FILE) -> bytes:
         parts = valid_path(path)
         if self.fd is None or path not in self.paths or not 0 < cap <= MAX_FILE:
             raise InputError('untracked_or_closed')

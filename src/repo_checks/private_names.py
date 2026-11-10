@@ -14,7 +14,6 @@ from repo_checks.inputs import Inputs, InputError, git_output
 
 ENV_KEY = "PRIVATE_NAME_TERMS_JSON"
 MAX_TERMS = 256
-MAX_FINDINGS = 1000
 
 
 class PolicyError(Exception):
@@ -45,7 +44,7 @@ def load_policy(raw):
 
 
 def scan(root, pattern):
-    findings = text_files = 0
+    found = False
     with Inputs(root) as inputs:
         staged = git_output(root, ["ls-files", "--stage", "-z"])
         for entry in staged.split(b"\0"):
@@ -56,19 +55,15 @@ def scan(root, pattern):
             if mode not in (b"100644", b"100755") or stage != b"0":
                 raise InputError("invalid_inventory")
         for name in sorted(inputs.paths):
-            findings += bool(pattern.search(normalize(name)))
+            found |= bool(pattern.search(normalize(name)))
             data = inputs.read_bytes(name)
             # No binary/encoding bypass: uncertain content is never certified.
             if b"\0" in data:
                 raise InputError("unscannable_content")
             text = data.decode("utf-8", errors="strict")
-            text_files += 1
-            findings += sum(bool(pattern.search(normalize(line))) for line in text.splitlines())
-            if findings > MAX_FINDINGS:
-                raise PolicyError()
-    return {"schema_version": 1, "status": "findings" if findings else "pass",
-            "findings": findings, "text_files": text_files,
-            "binary_files_unscanned": 0}
+            # Saturate internally, but continue validating every input file.
+            found |= any(pattern.search(normalize(line)) for line in text.splitlines())
+    return {"schema_version": 1, "status": "findings" if found else "pass"}
 
 
 def main(argv=None):

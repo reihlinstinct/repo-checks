@@ -91,9 +91,9 @@ def scan(root: Path) -> dict:
         for name in sorted(inputs.paths):
             if time.monotonic() > deadline:
                 raise ScanError()
-            data = inputs.read_bytes(name, binary_aware=True)
+            data = inputs.read_bytes(name)
             found = {"sensitive_filename"} if SENSITIVE.search(name) else set()
-            if data is None or b"\0" in data:
+            if b"\0" in data:
                 binary_files += 1
             else:
                 try:

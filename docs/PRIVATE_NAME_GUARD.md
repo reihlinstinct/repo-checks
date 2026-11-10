@@ -11,11 +11,14 @@ NFKC normalization, case folding and exact Unicode word boundaries apply.
 Attached letters, underscores, digits, niqqud and split phrases are not extra
 matches. Changing these semantics requires a separate reviewed decision.
 
-Public output contains only fixed-schema status and counts. Never report file
-paths, line numbers, excerpts, policy terms or hashes in public logs. Counts and
-pass/fail can themselves reveal policy membership to chosen inputs; the future
+Public output has exactly two keys: schema_version (1) and status (pass,
+findings or error). There are no counts, including coverage or per-file counts.
+Never report file paths, line numbers, excerpts, policy terms or hashes in public
+logs. Pass/fail can still reveal policy membership to chosen inputs; the future
 workflow must refuse fork candidates before accessing policy. Only trusted
-same-repository maintainers may submit candidates. Private local triage may
+same-repository maintainers may submit candidates. Matching saturates to a
+boolean without a policy-dependent findings limit; all files still undergo
+input validation even after a match. Private local triage may
 inspect source, but its detailed output must not be published.
 
 Every file has a 2 MiB cap and all bytes read count toward the 32 MiB aggregate
@@ -36,3 +39,12 @@ Generic privacy findings retain their existing caller policy; scanner errors
 must never be masked as success. Complete canonical UUID tokens are parsed as
 identifiers, while adjacent phone/ID/email data remains checked. This scanner
 is not proof that encoded, obfuscated or image-based text contains no names.
+
+## Integration binding required in the follow-up
+
+The scanner reads the tracked working-tree files, not committed blobs. It does
+not bind its result to a commit. The integration must freshly check out the exact
+candidate SHA, verify HEAD equals it and the working tree/index are clean before
+scanning, and report status only for that exact SHA. It must reject forks before
+policy access and pin the action to the full landed scanner commit on main,
+never an intermediate PR commit. These requirements are not installed here.

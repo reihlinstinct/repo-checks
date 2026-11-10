@@ -67,14 +67,12 @@ class PrivateNameTests(unittest.TestCase):
         for text in ['ZZAlphaProject', 'myZZSurname', 'prefix_zzalpha', 'ZZFull ZZNames']:
             self.assertIsNone(pattern.search(names.normalize(text)))
 
-    def test_locations_only_and_terms_never_echoed(self):
+    def test_status_only_and_terms_never_echoed(self):
         self.track('fixture.txt', 'safe\nZZAlpha value\nזזבדיקה\n')
         result = self.cli(self.policy)
         self.assertEqual(1, result.returncode)
         data = json.loads(result.stdout)
-        self.assertEqual(2, data['findings'])
-        self.assertNotIn('file', data)
-        self.assertNotIn('line', data)
+        self.assertEqual({'schema_version': 1, 'status': 'findings'}, data)
         self.assertNotIn('fixture.txt', result.stdout)
         for term in json.loads(self.policy):
             self.assertNotIn(term, result.stdout + result.stderr)
@@ -85,7 +83,7 @@ class PrivateNameTests(unittest.TestCase):
         self.track('ZZAlpha.txt', 'safe')
         result = self.cli(self.policy)
         self.assertEqual(1, result.returncode)
-        self.assertEqual(1, json.loads(result.stdout)['findings'])
+        self.assertEqual({'schema_version': 1, 'status': 'findings'}, json.loads(result.stdout))
         self.assertNotIn('ZZAlpha', result.stdout + result.stderr)
         self.assertNotIn('line', result.stdout)
 
@@ -96,6 +94,57 @@ class PrivateNameTests(unittest.TestCase):
                 self.assertEqual(2, result.returncode)
                 self.assertEqual({'schema_version': 1, 'status': 'error'}, json.loads(result.stdout))
                 self.assertEqual('', result.stderr)
+
+    def test_exact_public_schema_for_weighted_and_large_guesses(self):
+        cases = [('safe\n' * 1001, 'pass', 0),
+                 ('ZZAlpha\n' * 1000, 'findings', 1),
+                 ('ZZAlpha\n' * 1001, 'findings', 1),
+                 ('ZZAlpha\n' + 'ZZOther\n' * 2 + 'ZZSurname\n' * 4,
+                  'findings', 1)]
+        for content, status, code in cases:
+            with self.subTest(status=status, lines=content.count('\n')):
+                self.track('guesses.txt', content)
+                for action in (False, True):
+                    result = self.cli(self.policy, action=action)
+                    self.assertEqual(code, result.returncode)
+                    self.assertEqual({'schema_version': 1, 'status': status}, json.loads(result.stdout))
+                    self.assertEqual('', result.stderr)
+
+    def test_match_does_not_skip_later_input_validation(self):
+        self.track('a-matches.txt', 'ZZAlpha\n' * 1001)
+        self.track('z-invalid.txt', b'\0')
+        result = self.cli(self.policy)
+        self.assertEqual(2, result.returncode)
+        self.assertEqual({'schema_version': 1, 'status': 'error'}, json.loads(result.stdout))
+        self.assertEqual('', result.stderr)
+
+    def test_bootstrap_path_refusals_and_error_secret_removal(self):
+        import contextlib, io
+        spec = importlib.util.spec_from_file_location('name_bootstrap', ROOT / 'actions/private-names/bootstrap.py')
+        bootstrap = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(bootstrap)
+        link = Path(self.temp.name) / 'link'
+        link.symlink_to(self.root, target_is_directory=True)
+        # Outside workspace, action/root overlap, relative root, noncanonical root.
+        cases = [(str(ROOT), str(self.root)),
+                 (str(ROOT.parent), str(ROOT)),
+                 (self.temp.name, 'candidate'),
+                 (self.temp.name, str(link))]
+        @contextlib.contextmanager
+        def temporary_cwd():
+            old = os.getcwd()
+            try:
+                os.chdir(self.temp.name)
+                yield
+            finally:
+                os.chdir(old)
+        for workspace, root in cases:
+            with self.subTest(root=root), temporary_cwd(), patch.dict(os.environ, {
+                    names.ENV_KEY: self.policy, 'GITHUB_WORKSPACE': workspace,
+                    'CHECK_ROOT': root}), contextlib.redirect_stdout(io.StringIO()) as out:
+                self.assertEqual(2, bootstrap.main())
+                self.assertNotIn(names.ENV_KEY, os.environ)
+                self.assertEqual({'schema_version': 1, 'status': 'error'}, json.loads(out.getvalue()))
 
     def test_candidate_python_git_and_env_never_execute(self):
         marker = self.root / 'EXECUTED'
@@ -145,10 +194,10 @@ class PrivateNameTests(unittest.TestCase):
         self.track('one', b'\0' + b'x' * 5)
         self.track('two', b'\0' + b'x' * 5)
         with patch.object(inputs, 'MAX_TOTAL', 10), inputs.Inputs(self.root) as source:
-            self.assertEqual(6, len(source.read_bytes('one', binary_aware=True)))
+            self.assertEqual(6, len(source.read_bytes('one')))
             self.assertEqual(6, source.total)
             with self.assertRaises(inputs.InputError):
-                source.read_bytes('two', binary_aware=True)
+                source.read_bytes('two')
 
     def test_main_removes_secret_from_python_environment(self):
         import contextlib, io
@@ -157,7 +206,8 @@ class PrivateNameTests(unittest.TestCase):
             self.assertNotIn(names.ENV_KEY, os.environ)
 
     def test_action_contract_requires_isolated_python(self):
-        self.assertIn('python3 -I ', (ROOT / 'actions/private-names/action.yml').read_text())
+        lines = [line.strip() for line in (ROOT / 'actions/private-names/action.yml').read_text().splitlines() if line.strip().startswith('run:')]
+        self.assertEqual(['run: python3 -I "$TRUSTED_ACTION/bootstrap.py"'], lines)
 
     def test_invalid_utf8_even_without_nul_errors(self):
         self.track('latin', b'caf\xe9')
@@ -174,6 +224,17 @@ class PrivateNameTests(unittest.TestCase):
             with self.assertRaises(inputs.InputError):
                 names.scan(self.root, names.load_policy(self.policy))
 
+    def test_nonregular_inventory_mode_is_rejected_before_reading(self):
+        self.track('item', 'safe')
+        original = names.git_output
+        def staged(root, args, *rest):
+            if args == ['ls-files', '--stage', '-z']:
+                return b'160000 ' + b'a' * 40 + b' 0\titem\0'
+            return original(root, args, *rest)
+        with patch.object(names, 'git_output', side_effect=staged):
+            with self.assertRaises(inputs.InputError):
+                names.scan(self.root, names.load_policy(self.policy))
+
     def test_utf8_prefix_boundary_not_false_binary(self):
         self.track('boundary.txt', 'a' * 8191 + 'é' + ' ZZAlpha')
         self.assertEqual(1, self.cli(self.policy).returncode)
@@ -185,9 +246,7 @@ class PrivateNameTests(unittest.TestCase):
         self.assertEqual(1, result.returncode)
         self.assertNotIn('ZZSurname', result.stdout)
         self.assertEqual(1, len(result.stdout.splitlines()))
-        self.assertEqual(3, json.loads(result.stdout)['findings'])
-        self.assertNotIn('file', json.loads(result.stdout))
-        self.assertNotIn('line', json.loads(result.stdout))
+        self.assertEqual({'schema_version': 1, 'status': 'findings'}, json.loads(result.stdout))
 
     def test_symlink_missing_and_unmerged_fail_closed(self):
         self.track('item', 'safe')
