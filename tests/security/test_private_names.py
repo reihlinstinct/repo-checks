@@ -64,6 +64,15 @@ class PrivateNameTests(unittest.TestCase):
         self.assertNotIn('value', result.stdout + result.stderr)
         self.assertEqual('', result.stderr)
 
+    def test_filename_itself_fails_for_clean_and_binary_contents(self):
+        for content in ['safe', b'\x00binary']:
+            self.track('ZZAlpha.txt', content)
+            result = self.cli(self.policy)
+            self.assertEqual(1, result.returncode)
+            self.assertEqual([{'file': '[redacted-path]', 'line': 0}],
+                             json.loads(result.stdout)['locations'])
+            self.assertNotIn('ZZAlpha', result.stdout + result.stderr)
+
     def test_policy_missing_invalid_empty_or_wrong_shape_errors(self):
         for policy in [None, '', '[]', '{}', 'null', '[1]', '[true]', '[" "]', '["ZZBad\\nTerm"]', '["ZZBad\\u0000Term"]', self.policy * 500]:
             with self.subTest(policy_type=type(policy).__name__):

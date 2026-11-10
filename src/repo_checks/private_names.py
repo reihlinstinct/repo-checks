@@ -57,6 +57,13 @@ def scan(root, pattern):
             if mode not in (b"100644", b"100755") or stage != b"0":
                 raise InputError("invalid_inventory")
         for name in sorted(inputs.paths):
+            path_match = bool(pattern.search(normalize(name)))
+            safe_name = "[redacted-path]" if path_match else name
+            if path_match:
+                if len(locations) >= MAX_LOCATIONS:
+                    raise PolicyError()
+                # Line zero denotes the filename itself, including binary files.
+                locations.append({"file": safe_name, "line": 0})
             data = inputs.read_bytes(name, binary_aware=True)
             if data is None or b"\0" in data:
                 binary_files += 1
@@ -69,7 +76,6 @@ def scan(root, pattern):
             text_files += 1
             # Path itself can be hostile or contain a policy term. Redact it,
             # never emit even the normalized or hashed secret in diagnostics.
-            safe_name = "[redacted-path]" if pattern.search(normalize(name)) else name
             for number, line in enumerate(text.splitlines(), 1):
                 if pattern.search(normalize(line)):
                     if len(locations) >= MAX_LOCATIONS:
