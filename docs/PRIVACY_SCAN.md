@@ -14,9 +14,11 @@ phone forms and NANPA +1-NPA-555-0100 through 0199 are fictional exceptions.
 Exceptions apply to individual matched tokens, never whole lines or directories.
 Fixtures assemble non-reserved shapes at runtime; they contain no real identifiers.
 
-Limits: 20,000 tracked files, 2 MiB per file, 32 MiB total, 10-second Git listing with capped streaming output; 15-second scan deadline and 30-second CLI alarm.
-Binary/non-UTF8 files are counted as unscanned. PDFs, images, OCR, compressed
-archives, encoded secrets, personal names and arbitrary secrets require separate
+Limits: 20,000 tracked files, 2 MiB per file, 32 MiB bytes-read total, 10-second Git listing with capped streaming output; 15-second scan deadline and 30-second CLI alarm.
+Binary/non-UTF8 files are counted as unscanned, but every file still has the
+size cap and all bytes read count toward the aggregate budget. Oversized binary
+files error; no prefix classification bypasses the limits. PDFs, images, OCR, compressed
+archives, encoded secrets and arbitrary secrets require separate
 review. Pattern matches can be public official contacts, synthetic test data,
 geometry or other harmless numeric data. Do not call a candidate a confirmed leak
 without triage. Never auto-baseline or allowlist an existing hit simply to go green.
@@ -36,3 +38,7 @@ validation. Obfuscated addresses, mixed-script confusables, encoded identifiers,
 country-specific phone formats outside the advertised forms and text hidden in
 binary files may be missed. Unicode normalization/OCR is not a substitute for
 review. Long email-shaped candidates fail closed rather than being skipped.
+
+Secret-sourced personal-name enforcement is a separate trusted action; see
+[PRIVATE_NAME_GUARD.md](PRIVATE_NAME_GUARD.md). It reports only fixed-schema status,
+never counts, locations, policy terms or source excerpts. The generic pattern gate remains value-free.

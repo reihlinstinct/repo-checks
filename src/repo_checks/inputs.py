@@ -21,7 +21,7 @@ MAX_TOTAL = 32 * 1024 * 1024
 
 def git_output(root: Path, args: list[str], cap: int = MAX_INVENTORY) -> bytes:
     # Do not inherit repository routing, external diff/pager or injected config.
-    env = {k: v for k, v in os.environ.items() if not k.startswith('GIT_')}
+    env = {k: v for k, v in os.environ.items() if not k.startswith('GIT_') and k != 'PRIVATE_NAME_TERMS_JSON'}
     env.update(GIT_CONFIG_NOSYSTEM='1', GIT_CONFIG_GLOBAL=os.devnull,
                GIT_TERMINAL_PROMPT='0', GIT_OPTIONAL_LOCKS='0')
     command = ['git', '-c', 'core.fsmonitor=false', '-c', 'core.hooksPath=' + os.devnull,
@@ -131,6 +131,7 @@ class Inputs:
             before = os.fstat(handle)
             if not stat.S_ISREG(before.st_mode):
                 raise InputError('not_regular_file')
+            # A binary marker never waives file or aggregate byte limits.
             if before.st_size > cap or self.total + before.st_size > MAX_TOTAL:
                 raise InputError('file_limit')
             data = bytearray()

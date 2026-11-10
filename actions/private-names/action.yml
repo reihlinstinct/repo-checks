@@ -1,0 +1,14 @@
+name: Private name guard
+description: Secret-sourced forbidden-name scan from trusted pinned code.
+inputs:
+  checkout-root:
+    description: Absolute candidate checkout path within GITHUB_WORKSPACE.
+    required: true
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      env:
+        CHECK_ROOT: ${{ inputs.checkout-root }}
+        TRUSTED_ACTION: ${{ github.action_path }}
+      run: python3 -I "$TRUSTED_ACTION/bootstrap.py"
