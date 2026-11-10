@@ -14,11 +14,18 @@ import unicodedata
 from repo_checks import hmac_benchmark as base
 
 
-def pruned_candidates(text, lengths, stats):
-    """Reuse admissibility indexes; examined pairs never exceed public count."""
-    lengths = sorted(set(lengths))
-    if not lengths or any(type(n) is not int or n < 1 for n in lengths):
+def prepare_lengths(lengths):
+    """Validate/sort/index once per pass, never once per content line."""
+    values = tuple(lengths)
+    if not values or any(type(n) is not int or n < 1 for n in values):
         raise ValueError()
+    ordered = tuple(sorted(set(values)))
+    return ordered, frozenset(ordered)
+
+
+def pruned_candidates(text, prepared, stats):
+    """Build per-text admissibility indexes and traverse bounded windows."""
+    lengths, length_set = prepared
     alpha, controls, ends = array('Q'), array('Q'), array('Q')
     for i, c in enumerate(text):
         if c.isalpha():
@@ -28,7 +35,6 @@ def pruned_candidates(text, lengths, stats):
         j = i + 1
         if not c.isspace() and (j == len(text) or base.WORD.fullmatch(text[j]) is None):
             ends.append(j)
-    length_set = set(lengths)
     for start, c in enumerate(text):
         if c.isspace() or (start and base.WORD.fullmatch(text[start - 1]) is not None):
             continue
@@ -59,6 +65,12 @@ def pruned_candidates(text, lengths, stats):
 
 def complete_pass(raw, lengths, maximum, content=False):
     started = time.perf_counter()
+    prepared = prepare_lengths(lengths)
+    if type(maximum) is not int or maximum < prepared[0][-1]:
+        raise ValueError()
+    prepare_seconds = time.perf_counter() - started
+    targets = frozenset({b'Z' * 32})
+    started = time.perf_counter()
     lines = [base.normalize(s) for s in raw.splitlines()] if content else [base.normalize(raw)]
     normalize_seconds = time.perf_counter() - started
     started = time.perf_counter()
@@ -72,11 +84,11 @@ def complete_pass(raw, lengths, maximum, content=False):
     calls = byte_work = 0
     started = time.perf_counter()
     for text in lines:
-        for i, j in pruned_candidates(text, lengths, stats):
+        for i, j in pruned_candidates(text, prepared, stats):
             encoded = text[i:j].encode('utf-8')
             digest = hmac.digest(base.SYNTHETIC_KEY, base.LABEL + (j-i).to_bytes(4, 'big') + encoded, hashlib.sha256)
             # Synthetic set lookup, with no match-dependent stop or work change.
-            _ = digest in {b'Z' * 32}
+            _ = digest in targets
             calls += 1
             byte_work += len(encoded)
     second_seconds = time.perf_counter() - started
@@ -85,9 +97,9 @@ def complete_pass(raw, lengths, maximum, content=False):
     return {**stats, 'calls': calls, 'utf8_bytes': byte_work,
             'public_candidates': public_calls, 'public_utf8_bytes': public_bytes,
             'normalized_codepoints': sum(map(len, lines)), 'lines': len(lines),
-            'normalize_seconds': normalize_seconds, 'count_seconds': count_seconds,
+            'prepare_seconds': prepare_seconds, 'normalize_seconds': normalize_seconds, 'count_seconds': count_seconds,
             'pruned_second_seconds': second_seconds,
-            'total_seconds': normalize_seconds + count_seconds + second_seconds}
+            'total_seconds': prepare_seconds + normalize_seconds + count_seconds + second_seconds}
 
 
 def read_decode_measurement(total=32 * 1024 * 1024, chunk=2 * 1024 * 1024):

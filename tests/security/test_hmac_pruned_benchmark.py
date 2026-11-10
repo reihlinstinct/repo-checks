@@ -25,14 +25,14 @@ class PrunedTests(unittest.TestCase):
                     if base.admissible(text[i:j]):
                         expected.add((i, j))
             stats = {'examined_pairs': 0}
-            actual = list(pruned.pruned_candidates(text, lengths, stats))
+            actual = list(pruned.pruned_candidates(text, pruned.prepare_lengths(lengths), stats))
             self.assertEqual(expected, set(actual))
             self.assertEqual(len(actual), len(set(actual)))
             self.assertLessEqual(stats['examined_pairs'], base.work_counts(text, max(lengths))[0])
 
     def test_punctuation_has_zero_second_pass_pairs(self):
         stats = {'examined_pairs': 0}
-        self.assertEqual([], list(pruned.pruned_candidates('.-' * 1000, range(1, 257), stats)))
+        self.assertEqual([], list(pruned.pruned_candidates('.-' * 1000, pruned.prepare_lengths(range(1, 257)), stats)))
         self.assertEqual(0, stats['examined_pairs'])
 
     def test_complete_pass_covers_content_and_repeated_work(self):
@@ -58,3 +58,21 @@ class PrunedTests(unittest.TestCase):
         source = (ROOT / 'src/repo_checks/hmac_pruned_benchmark.py').read_text()
         for unsafe in ('os.environ', 'getenv(', 'subprocess', 'PRIVATE_NAME_'):
             self.assertNotIn(unsafe, source)
+
+    def test_lengths_prepared_once_per_content_pass(self):
+        from unittest.mock import patch
+        original = pruned.prepare_lengths
+        with patch.object(pruned, 'prepare_lengths', wraps=original) as prepare:
+            result = pruned.complete_pass('a\n' * 100, range(1, 257), 2304, content=True)
+        self.assertEqual(1, prepare.call_count)
+        self.assertEqual(100, result['lines'])
+        self.assertEqual(100, result['calls'])
+        self.assertIn('prepare_seconds', result)
+
+    def test_invalid_lengths_refused_before_any_normalization(self):
+        from unittest.mock import patch
+        for lengths, maximum in [([], 5), ([True], 5), ([0], 5), (['1'], 5), ([6], 5)]:
+            with self.subTest(lengths=lengths), patch.object(base, 'normalize') as normalize:
+                with self.assertRaises(ValueError):
+                    pruned.complete_pass('a', lengths, maximum)
+                normalize.assert_not_called()

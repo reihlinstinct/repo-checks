@@ -17,14 +17,23 @@ Larger complete dense passes are deliberately not guessed to fit the five-minute
 measurement job. Counted work and the measured range must accompany any
 projection; a small measurement is not certification of a large input envelope.
 
-The pruner builds alphabetic/control/boundary endpoint indexes. For each eligible
+Length validation, sorting and set preparation happen exactly once per complete
+pass, before normalization or second-pass timing. Preparation time is reported
+separately and included in the total; lengths over the public maximum are refused.
+A regression counts one preparation call across many content lines.
+
+The pruner builds alphabetic/control/boundary endpoint indexes for each line. For each eligible
 start, it finds the admissible endpoint window, then traverses the shorter of
 that window and protected-length candidates within it. Every examined pair is
 counted, including a nonmember endpoint/length. No repeated per-substring
 admissibility scan is used. Differential tests compare the full candidate set
 with naive enumeration and require examined pairs, HMAC calls and hashed bytes
 to stay below the first pass's public figures. Punctuation-only content examines
-zero second-pass pairs. All counted work is measured, never truncated.
+zero second-pass pairs. The second pass also has linear per-normalized-code-point index construction
+and start scanning with bisects, even when examined pairs are zero. These costs
+are not represented by the pair count; production budgets must also count lines
+and normalized code points. Indexes are rebuilt, not shared with the first pass.
+All measured passes complete and are never truncated.
 
 Content mode is exercised with many short lines. Other synthetic corpora are
 single-line inputs treated as whole strings. The complete measurement includes
