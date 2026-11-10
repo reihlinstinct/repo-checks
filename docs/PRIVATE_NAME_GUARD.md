@@ -10,7 +10,8 @@ with exit 2. Matches fail with exit 1. Scanner failures also fail with exit 2.
 Matching uses NFKC normalization, Unicode case-folding and exact word boundaries.
 No whole-line allowlists, consumer policy files or automatic baselines are used.
 Each matching line reports only its JSON-escaped file path and line number.
-Paths containing policy terms are redacted. No excerpts or matching terms are
+Paths containing policy terms are redacted and fail even when their contents
+are clean or binary; line zero denotes a filename finding. No excerpts or matching terms are
 reported. Binary contents are explicitly counted as unscanned, not certified.
 Encoded/obfuscated names and OCR remain outside this text gate's scope.
 
@@ -72,3 +73,33 @@ image, encrypted, compressed or PDF contents.
 All regression policies use invented test terms. Existing findings need private
 triage; never delete intentional private-source content or waive collisions just
 to turn a public-export check green.
+
+## Consumer installation
+
+The reviewed `.github/workflows/private-name-guard.yml` reusable workflow owns
+binding, fetch, scan and reporting. Pin callers to its full reviewed immutable
+commit SHA, never a branch or tag. The caller's `privacy-request.yml` is a
+secret-free `pull_request` workflow named `Private name scan request`, with no
+checkout and one fixed echo step. The caller's trusted `workflow_run` listener
+matches that exact name and completed type, then calls the pinned reusable
+workflow with only `actions: read`, `contents: read` and `statuses: write`.
+Permissions are reduced per job: binding gets actions read, scanning gets
+contents read, reporting gets statuses write. Do not pass `secrets: inherit`.
+The caller explicitly passes only `PRIVATE_NAME_TERMS_JSON`; the reusable
+workflow declares that named secret required. Set the exact-default-branch-only
+`privacy-policy` environment in each CALLER repository, not merely this shared
+repository. The scan job selects that caller environment, whose secret takes
+precedence. GitHub requires explicit named forwarding even for environment-only
+secrets; omission otherwise resolves empty. Never use a repository-scoped copy
+as a workaround. Verify the first consumer end to end before widening. No token or policy
+is passed to Git fetch, and candidate fetch/checkouts suppress all output to
+avoid accidentally printing a commit subject containing private text.
+
+The binding job re-reads the original workflow run through GitHub and requires
+the expected request path, event, completed state, repository ID, source head
+repository ID, immutable head SHA and conclusion to agree with the wake payload.
+No candidate text is interpolated into executable JavaScript or shell source.
+A failed source request or any failed/skipped/cancelled scan posts failure, never
+success. The head status context is exactly `private-name-guard`; require it in
+branch settings only after verifying installation on the default branch.
+Environment restrictions do not establish branch-required checks by themselves.
