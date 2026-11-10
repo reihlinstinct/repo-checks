@@ -1,0 +1,24 @@
+name: Synthetic HMAC benchmark
+on:
+  pull_request:
+    paths:
+      - src/repo_checks/hmac_benchmark.py
+      - tools/benchmark_name_hmac.py
+      - tests/security/test_hmac_benchmark.py
+      - .github/workflows/hmac-benchmark.yml
+permissions:
+  contents: read
+jobs:
+  benchmark:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - name: Synthetic public-range work and hash samples
+        run: python3 -I tools/benchmark_name_hmac.py
+      - name: Scope summary
+        if: always()
+        run: |
+          printf '%s\n' '## Synthetic HMAC benchmark' 'Synthetic strings and dummy key bytes only. No policy, secrets, configuration or scanner behavior changed. Results guide a later reviewed budget decision; samples do not certify production bounds.' >> "$GITHUB_STEP_SUMMARY"
