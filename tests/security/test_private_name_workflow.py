@@ -162,6 +162,49 @@ class WorkflowTests(unittest.TestCase):
         self.assertIn('--baseline docs/scorecard-baseline.json',
                       (ROOT / '.github/workflows/ci.yml').read_text())
 
+    def test_exact_job_privileges_and_secret_boundary(self):
+        text = WORKFLOW.read_text()
+        sections = {}
+        for job in ('bind', 'scan', 'report'):
+            body = text.split('\n  ' + job + ':\n', 1)[1]
+            import re
+            body = re.split(r'\n  [a-z][a-z-]*:\n', body, maxsplit=1)[0]
+            sections[job] = body
+        expected = {'bind': {'actions': 'read'}, 'scan': {'contents': 'read'},
+                    'report': {'actions': 'read', 'statuses': 'write'}}
+        for job, body in sections.items():
+            lines = body.splitlines()
+            start = lines.index('    permissions:') + 1
+            actual = {}
+            for line in lines[start:]:
+                if not line.startswith('      '):
+                    break
+                key, value = line.strip().split(':', 1)
+                self.assertNotIn(key, actual)
+                actual[key] = value.strip()
+            self.assertEqual(expected[job], actual)
+        self.assertEqual(1, text.count('${{ secrets.'))
+        self.assertEqual(0, sections['bind'].count('secrets.'))
+        self.assertEqual(0, sections['report'].count('secrets.'))
+        secret_step = sections['scan'].split('      - name: Secret-sourced private-name scan\n', 1)[1].split('      - name:', 1)[0]
+        self.assertEqual(1, secret_step.count('secrets.'))
+        self.assertIn('PRIVATE_NAME_TERMS_JSON: ${{ secrets.PRIVATE_NAME_TERMS_JSON }}', secret_step)
+        self.assertIn("    if: always() && needs.bind.result == 'success'", sections['report'])
+        self.assertIn('permissions: {}', text.split('jobs:', 1)[0])
+
+    def test_both_landed_pins_and_exact_git_hardening(self):
+        text = WORKFLOW.read_text()
+        import re
+        pins = re.findall(r'uses: reihlinstinct/repo-checks/actions/([^@]+)@([^\s]+)', text)
+        self.assertEqual([('private-names', '52293de5de6c2257b531e36a24eb2be61d80d509'),
+                          ('privacy', '52293de5de6c2257b531e36a24eb2be61d80d509')], pins)
+        for line in ['export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null GIT_TERMINAL_PROMPT=0',
+                     'export GIT_CONFIG_COUNT=3',
+                     'export GIT_CONFIG_KEY_0=core.hooksPath GIT_CONFIG_VALUE_0=/dev/null',
+                     'export GIT_CONFIG_KEY_1=core.fsmonitor GIT_CONFIG_VALUE_1=false',
+                     'export GIT_CONFIG_KEY_2=protocol.file.allow GIT_CONFIG_VALUE_2=never']:
+            self.assertIn('          ' + line + '\n', text)
+
     def test_privilege_and_execution_contract(self):
         text = WORKFLOW.read_text()
         scan = text.split('\n  scan:\n')[1].split('\n  report:\n')[0]
