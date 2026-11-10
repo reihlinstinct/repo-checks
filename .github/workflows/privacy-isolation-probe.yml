@@ -1,0 +1,19 @@
+name: Synthetic environment isolation probe
+on:
+  pull_request:
+  push:
+    branches: [instinct/synthetic-environment-isolation]
+permissions: {}
+jobs:
+  blocked:
+    name: Candidate refs must be denied
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    environment: privacy-policy
+    steps:
+      - name: Must never start on a candidate ref
+        env:
+          PROBE: ${{ secrets.PRIVACY_ISOLATION_PROBE }}
+        run: |
+          echo 'Environment isolation failed: candidate job was allowed to start.'
+          exit 1
