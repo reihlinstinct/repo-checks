@@ -67,9 +67,36 @@ def work_counts(text, max_length):
     return count, byte_work
 
 
+def content_work_counts(raw, max_length):
+    """Match the content path: splitlines first, normalize each line whole."""
+    started = time.perf_counter()
+    lines = [normalize(line) for line in raw.splitlines()]
+    normalized_seconds = time.perf_counter() - started
+    started = time.perf_counter()
+    count = byte_work = 0
+    for line in lines:
+        c, b = work_counts(line, max_length)
+        count += c
+        byte_work += b
+    return {'lines': len(lines), 'normalized_codepoints': sum(map(len, lines)),
+            'candidates': count, 'candidate_utf8_bytes': byte_work,
+            'normalize_seconds': normalized_seconds,
+            'count_seconds': time.perf_counter() - started}
+
+
 def sampled_hash_work(text, lengths, limit=20000):
-    """Time bounded synthetic work only. This sample cap is NOT a scan budget."""
-    calls = byte_work = 0
+    """Bound examined boundary pairs, then time HMAC over prepared messages.
+
+    Pair limit bounds this synthetic experiment, not a production scan budget.
+    Filtering includes slicing, admissibility and message encoding; HMAC timing
+    includes only digest calls over already-prepared messages. No matching.
+    """
+    if type(limit) is not int or limit < 1:
+        raise ValueError()
+    examined = 0
+    messages = []
+    byte_work = 0
+    stopped = False
     started = time.perf_counter()
     for i in range(len(text)):
         if i and WORD.fullmatch(text[i - 1]) is not None:
@@ -78,16 +105,24 @@ def sampled_hash_work(text, lengths, limit=20000):
             j = i + length
             if j > len(text) or (j < len(text) and WORD.fullmatch(text[j]) is not None):
                 continue
+            examined += 1
             candidate = text[i:j]
-            if not admissible(candidate):
-                continue
-            encoded = candidate.encode('utf-8')
-            hmac.digest(SYNTHETIC_KEY, LABEL + length.to_bytes(4, 'big') + encoded, hashlib.sha256)
-            calls += 1
-            byte_work += len(encoded)
-            if calls == limit:
-                return calls, byte_work, time.perf_counter() - started
-    return calls, byte_work, time.perf_counter() - started
+            if admissible(candidate):
+                encoded = candidate.encode('utf-8')
+                messages.append(LABEL + length.to_bytes(4, 'big') + encoded)
+                byte_work += len(encoded)
+            if examined == limit:
+                stopped = True
+                break
+        if stopped:
+            break
+    filter_seconds = time.perf_counter() - started
+    started = time.perf_counter()
+    for message in messages:
+        hmac.digest(SYNTHETIC_KEY, message, hashlib.sha256)
+    return {'examined_pairs': examined, 'rejected_pairs': examined - len(messages),
+            'calls': len(messages), 'utf8_bytes': byte_work, 'pair_cap_reached': stopped,
+            'filter_seconds': filter_seconds, 'hmac_seconds': time.perf_counter() - started}
 
 
 def expansion_bound():
@@ -125,10 +160,16 @@ def main():
                                        ('sparse', [1, 4, 8, 16, 32, 64, 128, 256, 512, maximum]),
                                        ('dense', list(range(1, 257)))]:
                     for repeat in range(3):
-                        calls, hashed, seconds = sampled_hash_work(text, lengths)
-                        print(json.dumps({'kind': 'hmac_sample', 'corpus': corpus,
-                                          'shape': shape, 'repeat': repeat, 'calls': calls,
-                                          'utf8_bytes': hashed, 'seconds': seconds}), flush=True)
+                        sample = sampled_hash_work(text, lengths)
+                        print(json.dumps({'kind': 'filtered_hmac_sample', 'corpus': corpus,
+                                          'shape': shape, 'repeat': repeat, **sample}), flush=True)
+    for corpus, pattern in {'many_lf': 'a\n', 'many_crlf': 'a\r\n',
+                            'many_unicode_separator': 'a\u2028'}.items():
+        for raw_size in (32768, 2 * 1024 * 1024):
+            raw = pattern * (raw_size // len(pattern.encode('utf-8')))
+            print(json.dumps({'kind': 'content_count', 'corpus': corpus,
+                              'raw_bytes': len(raw.encode('utf-8')),
+                              **content_work_counts(raw, maximum)}), flush=True)
     return 0
 
 
