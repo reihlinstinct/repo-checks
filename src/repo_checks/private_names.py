@@ -14,7 +14,7 @@ from repo_checks.inputs import Inputs, InputError, git_output
 
 ENV_KEY = "PRIVATE_NAME_TERMS_JSON"
 MAX_TERMS = 256
-MAX_LOCATIONS = 1000
+MAX_FINDINGS = 1000
 
 
 class PolicyError(Exception):
@@ -45,8 +45,7 @@ def load_policy(raw):
 
 
 def scan(root, pattern):
-    locations = []
-    text_files = binary_files = 0
+    findings = text_files = 0
     with Inputs(root) as inputs:
         staged = git_output(root, ["ls-files", "--stage", "-z"])
         for entry in staged.split(b"\0"):
@@ -57,33 +56,19 @@ def scan(root, pattern):
             if mode not in (b"100644", b"100755") or stage != b"0":
                 raise InputError("invalid_inventory")
         for name in sorted(inputs.paths):
-            path_match = bool(pattern.search(normalize(name)))
-            safe_name = "[redacted-path]" if path_match else name
-            if path_match:
-                if len(locations) >= MAX_LOCATIONS:
-                    raise PolicyError()
-                # Line zero denotes the filename itself, including binary files.
-                locations.append({"file": safe_name, "line": 0})
-            data = inputs.read_bytes(name, binary_aware=True)
-            if data is None or b"\0" in data:
-                binary_files += 1
-                continue
-            try:
-                text = data.decode("utf-8")
-            except UnicodeDecodeError:
-                binary_files += 1
-                continue
+            findings += bool(pattern.search(normalize(name)))
+            data = inputs.read_bytes(name)
+            # No binary/encoding bypass: uncertain content is never certified.
+            if b"\0" in data:
+                raise InputError("unscannable_content")
+            text = data.decode("utf-8", errors="strict")
             text_files += 1
-            # Path itself can be hostile or contain a policy term. Redact it,
-            # never emit even the normalized or hashed secret in diagnostics.
-            for number, line in enumerate(text.splitlines(), 1):
-                if pattern.search(normalize(line)):
-                    if len(locations) >= MAX_LOCATIONS:
-                        raise PolicyError()
-                    locations.append({"file": safe_name, "line": number})
-    return {"schema_version": 1, "status": "findings" if locations else "pass",
-            "locations": locations, "text_files": text_files,
-            "binary_files_unscanned": binary_files}
+            findings += sum(bool(pattern.search(normalize(line))) for line in text.splitlines())
+            if findings > MAX_FINDINGS:
+                raise PolicyError()
+    return {"schema_version": 1, "status": "findings" if findings else "pass",
+            "findings": findings, "text_files": text_files,
+            "binary_files_unscanned": 0}
 
 
 def main(argv=None):

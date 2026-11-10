@@ -33,4 +33,4 @@ jobs:
         run: |
           printf "%s\n" "## Privacy scan" "- Privacy state: ${{ steps.privacy.outputs.state }}; step outcome: ${{ steps.privacy.outcome }}." "- Counts only, no finding values or paths in public logs." "- Binary files require separate review; this is not privacy certification." >> "$GITHUB_STEP_SUMMARY"
       - name: Check own workflow
-        run: python3 src/repo_checks/scorecard.py --baseline docs/scorecard-baseline.json
+        run: python3 src/repo_checks/scorecard.py

@@ -72,20 +72,22 @@ class PrivateNameTests(unittest.TestCase):
         result = self.cli(self.policy)
         self.assertEqual(1, result.returncode)
         data = json.loads(result.stdout)
-        self.assertEqual([{'file': 'fixture.txt', 'line': 2}, {'file': 'fixture.txt', 'line': 3}], data['locations'])
+        self.assertEqual(2, data['findings'])
+        self.assertNotIn('file', data)
+        self.assertNotIn('line', data)
+        self.assertNotIn('fixture.txt', result.stdout)
         for term in json.loads(self.policy):
             self.assertNotIn(term, result.stdout + result.stderr)
         self.assertNotIn('value', result.stdout + result.stderr)
         self.assertEqual('', result.stderr)
 
-    def test_filename_itself_fails_for_clean_and_binary_contents(self):
-        for content in ['safe', b'\x00binary']:
-            self.track('ZZAlpha.txt', content)
-            result = self.cli(self.policy)
-            self.assertEqual(1, result.returncode)
-            self.assertEqual([{'file': '[redacted-path]', 'line': 0}],
-                             json.loads(result.stdout)['locations'])
-            self.assertNotIn('ZZAlpha', result.stdout + result.stderr)
+    def test_filename_itself_fails_without_public_location(self):
+        self.track('ZZAlpha.txt', 'safe')
+        result = self.cli(self.policy)
+        self.assertEqual(1, result.returncode)
+        self.assertEqual(1, json.loads(result.stdout)['findings'])
+        self.assertNotIn('ZZAlpha', result.stdout + result.stderr)
+        self.assertNotIn('line', result.stdout)
 
     def test_policy_missing_invalid_empty_or_wrong_shape_errors(self):
         for policy in [None, '', '[]', '{}', 'null', '[1]', '[true]', '[" "]', '["ZZBad\\nTerm"]', '["ZZBad\\u0000Term"]', self.policy * 500]:
@@ -121,18 +123,56 @@ class PrivateNameTests(unittest.TestCase):
         self.assertTrue(seen)
         self.assertTrue(all(names.ENV_KEY not in env for env in seen))
 
-    def test_large_binary_probe_and_oversize_text(self):
-        self.track('opaque.enc', b'Salted__\x00\xff' + b'x' * (privacy.MAX_FILE + 100))
-        result = self.cli(self.policy)
-        self.assertEqual(0, result.returncode)
-        self.assertEqual(1, json.loads(result.stdout)['binary_files_unscanned'])
-        self.assertEqual(1, privacy.scan(self.root)['binary_files_unscanned'])
-        self.track('large.txt', b'x' * (privacy.MAX_FILE + 1))
+    def test_binary_encoding_and_size_probes_fail_closed(self):
+        probes = [b'\0ZZAlpha', b'\0ZZAlpha' + b'x' * (privacy.MAX_FILE + 1),
+                  b'\x89PNG\r\n\x1a\nZZAlpha' + b'x' * (privacy.MAX_FILE + 1),
+                  b'caf\xe9 ZZAlpha', 'ZZAlpha'.encode('utf-16'),
+                  b'Salted__\0\xff' + b'x' * (privacy.MAX_FILE + 1),
+                  b'x' * (privacy.MAX_FILE + 1), b'x' * 9000 + b'\0ZZAlpha']
+        for content in probes:
+            self.track('opaque.enc', content)
+            result = self.cli(self.policy)
+            self.assertEqual(2, result.returncode)
+            self.assertEqual({'schema_version': 1, 'status': 'error'}, json.loads(result.stdout))
+            self.assertEqual('', result.stderr)
+
+    def test_generic_binary_does_not_waive_size_cap(self):
+        self.track('creds.json', b'\0' + b'x' * (privacy.MAX_FILE + 100))
+        with self.assertRaises(inputs.InputError):
+            privacy.scan(self.root)
+
+    def test_binary_bytes_count_toward_aggregate_budget(self):
+        self.track('one', b'\0' + b'x' * 5)
+        self.track('two', b'\0' + b'x' * 5)
+        with patch.object(inputs, 'MAX_TOTAL', 10), inputs.Inputs(self.root) as source:
+            self.assertEqual(6, len(source.read_bytes('one', binary_aware=True)))
+            self.assertEqual(6, source.total)
+            with self.assertRaises(inputs.InputError):
+                source.read_bytes('two', binary_aware=True)
+
+    def test_main_removes_secret_from_python_environment(self):
+        import contextlib, io
+        with patch.dict(os.environ, {names.ENV_KEY: self.policy}), contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(0, names.main(['--root', str(self.root)]))
+            self.assertNotIn(names.ENV_KEY, os.environ)
+
+    def test_action_contract_requires_isolated_python(self):
+        self.assertIn('python3 -I ', (ROOT / 'actions/private-names/action.yml').read_text())
+
+    def test_invalid_utf8_even_without_nul_errors(self):
+        self.track('latin', b'caf\xe9')
         self.assertEqual(2, self.cli(self.policy).returncode)
 
-    def test_sensitive_large_binary_still_flagged(self):
-        self.track('creds.json', b'\x00' + b'x' * (privacy.MAX_FILE + 100))
-        self.assertEqual(1, privacy.scan(self.root)['counts']['sensitive_filename'])
+    def test_nonzero_inventory_stage_is_rejected(self):
+        self.track('item', 'safe')
+        original = names.git_output
+        def staged(root, args, *rest):
+            if args == ['ls-files', '--stage', '-z']:
+                return b'100644 ' + b'a' * 40 + b' 1\titem\0'
+            return original(root, args, *rest)
+        with patch.object(names, 'git_output', side_effect=staged):
+            with self.assertRaises(inputs.InputError):
+                names.scan(self.root, names.load_policy(self.policy))
 
     def test_utf8_prefix_boundary_not_false_binary(self):
         self.track('boundary.txt', 'a' * 8191 + 'é' + ' ZZAlpha')
@@ -145,7 +185,9 @@ class PrivateNameTests(unittest.TestCase):
         self.assertEqual(1, result.returncode)
         self.assertNotIn('ZZSurname', result.stdout)
         self.assertEqual(1, len(result.stdout.splitlines()))
-        self.assertIn({'file': '[redacted-path]', 'line': 1}, json.loads(result.stdout)['locations'])
+        self.assertEqual(3, json.loads(result.stdout)['findings'])
+        self.assertNotIn('file', json.loads(result.stdout))
+        self.assertNotIn('line', json.loads(result.stdout))
 
     def test_symlink_missing_and_unmerged_fail_closed(self):
         self.track('item', 'safe')
