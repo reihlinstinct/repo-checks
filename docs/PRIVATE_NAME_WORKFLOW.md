@@ -23,7 +23,8 @@ No repository or organization secret of that name may exist: candidate workflows
 could read it outside the protected environment. Forward the name explicitly,
 even when no repository/organization value exists; never use secrets: inherit. The
 privacy-policy environment belongs to the caller repository and must allow only
-its exact default branch, with no tag rule or administrator bypass. Only the
+its exact default branch, with no tag rule and no reviewer or administrator
+bypass. Only the
 trusted scan step receives the policy. Candidate code is never executed.
 
 Binding requires a public repository, completed pull_request request run,
@@ -57,5 +58,7 @@ by these unit tests: the first consumer must prove them before wider adoption.
 
 Secret resolution follows the [GitHub reusable workflow documentation](https://docs.github.com/en/actions/how-tos/reuse-automations/reuse-workflows).
 The first consumer must prove environment-only secret resolution with a synthetic
-policy before actual-policy adoption; no repository/organization duplicate may
-be created to make that proof pass.
+policy before actual-policy adoption. That proof must verify the policy is
+nonempty in the trusted scan step only and empty in every other job/step, using
+value-free assertions rather than printing it. No repository/organization
+duplicate may be created to make that proof pass.
