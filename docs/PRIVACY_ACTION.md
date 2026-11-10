@@ -20,4 +20,4 @@ No consumer changes in this PR. Next is one separately reviewed real shadow
 consumer that keeps the old required guard. Only after remote proof should
 individual public repositories adopt this gate. Findings require private
 triage; never auto-baseline, loosen checks or publish source values to pass.
-Binary/PDF/image contents and semantic participant names still need review.
+Binary/PDF/image contents still need review. Secret-sourced name enforcement uses the separate trusted private-names action documented in PRIVATE_NAME_GUARD.md.

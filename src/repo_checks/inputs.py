@@ -21,7 +21,7 @@ MAX_TOTAL = 32 * 1024 * 1024
 
 def git_output(root: Path, args: list[str], cap: int = MAX_INVENTORY) -> bytes:
     # Do not inherit repository routing, external diff/pager or injected config.
-    env = {k: v for k, v in os.environ.items() if not k.startswith('GIT_')}
+    env = {k: v for k, v in os.environ.items() if not k.startswith('GIT_') and k != 'PRIVATE_NAME_TERMS_JSON'}
     env.update(GIT_CONFIG_NOSYSTEM='1', GIT_CONFIG_GLOBAL=os.devnull,
                GIT_TERMINAL_PROMPT='0', GIT_OPTIONAL_LOCKS='0')
     command = ['git', '-c', 'core.fsmonitor=false', '-c', 'core.hooksPath=' + os.devnull,
@@ -116,7 +116,7 @@ class Inputs:
     def __exit__(self, *_):
         self.close()
 
-    def read_bytes(self, path: str, cap: int = MAX_FILE) -> bytes:
+    def read_bytes(self, path: str, cap: int = MAX_FILE, *, binary_aware: bool = False) -> bytes | None:
         parts = valid_path(path)
         if self.fd is None or path not in self.paths or not 0 < cap <= MAX_FILE:
             raise InputError('untracked_or_closed')
@@ -131,23 +131,37 @@ class Inputs:
             before = os.fstat(handle)
             if not stat.S_ISREG(before.st_mode):
                 raise InputError('not_regular_file')
-            if before.st_size > cap or self.total + before.st_size > MAX_TOTAL:
+            # Classify a bounded prefix before enforcing the TEXT size cap.
+            # Binary contents remain explicitly unscanned, never silently waived.
+            prefix = os.read(handle, min(8192, cap)) if binary_aware else b''
+            binary = b'\0' in prefix
+            if not binary and binary_aware:
+                import codecs
+                try:
+                    codecs.getincrementaldecoder('utf-8')().decode(prefix, final=False)
+                except UnicodeDecodeError:
+                    binary = True
+            if not binary and (before.st_size > cap or self.total + before.st_size > MAX_TOTAL):
                 raise InputError('file_limit')
-            data = bytearray()
-            while True:
-                chunk = os.read(handle, min(65536, cap + 1 - len(data)))
-                if not chunk:
-                    break
-                data.extend(chunk)
-                if len(data) > cap or self.total + len(data) > MAX_TOTAL:
+            data = bytearray(prefix)
+            if binary:
+                if self.total + len(data) > MAX_TOTAL:
                     raise InputError('file_limit')
+            else:
+                while True:
+                    chunk = os.read(handle, min(65536, cap + 1 - len(data)))
+                    if not chunk:
+                        break
+                    data.extend(chunk)
+                    if len(data) > cap or self.total + len(data) > MAX_TOTAL:
+                        raise InputError('file_limit')
             after = os.fstat(handle)
             linked = os.stat(parts[-1], dir_fd=directory, follow_symlinks=False)
             identity = lambda s: (s.st_dev, s.st_ino, s.st_size, s.st_mtime_ns, s.st_ctime_ns)
             if identity(before) != identity(after) or identity(after) != identity(linked):
                 raise InputError('file_changed')
             self.total += len(data)
-            return bytes(data)
+            return None if binary else bytes(data)
         except InputError:
             raise
         except (OSError, UnicodeError):
