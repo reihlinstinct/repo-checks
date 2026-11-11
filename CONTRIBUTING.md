@@ -16,3 +16,10 @@ script execution, runtime dependencies or privileged untrusted-PR execution.
 ## File placement (enforced)
 
 Decide where a file lives BEFORE creating it. The contract in `.repo-layout.yml` lists the allowed top-level directories, the file types permitted in each, and the required community-standards files; `python3 tools/check_repo_layout.py` enforces it in CI. A new kind of file means updating the contract in the same PR.
+
+## Accessibility
+
+UI changes follow [the a11y standard](docs/ACCESSIBILITY_STANDARD.md): state the
+routes, languages and interaction states tested, automated outcomes and manual
+gaps. Test new failures with regressions. Do not label automated-only results as
+SI 5568 or WCAG conformance. Preserve the root ACCESSIBILITY.md layout requirement.

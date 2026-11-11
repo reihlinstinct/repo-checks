@@ -6,7 +6,8 @@
     "LICENSE",
     "CONTRIBUTING.md",
     "CODE_OF_CONDUCT.md",
-    "SECURITY.md"
+    "SECURITY.md",
+    "ACCESSIBILITY.md"
   ],
   "root": {
     "allow": [
@@ -29,7 +30,9 @@
     "actions": {
       "allow": [
         "*.py",
-        "*.yml"
+        "*.yml",
+        "*.mjs",
+        "*.json"
       ]
     },
     "docs": {
