@@ -14,7 +14,7 @@ python3 -I /trusted/repo-checks/tools/repo_checks.py sensitive-scan \
 ```
 
 Resolve both commits, find their merge base, then inspect each introduced commit
-(up to256), not only the final tree. A secret added then removed before push
+(up to 256), not only the final tree. A secret added then removed before push
 still blocks. For each commit, scan added diff lines against its first parent
 and all committed text under fixture/fixtures/testdata/test-data/__fixtures__
 directories. Also scan selected pathnames. No worktree files or candidate code
@@ -23,13 +23,13 @@ Unchanged non-fixture baseline files and older history are not audited.
 
 Output is a JSON status, category counts and file:line locations, never matched
 values, excerpts or source exceptions. Counts are unique file/line/category
-locations across inspected commits. Path findings use line0. Suspicious or
+locations across inspected commits. Path-only findings use the explicit sentinel line 0, not a content line. Suspicious or
 nonportable paths are withheld. Exit0 means no supported finding in this scope;
 exit1 means findings; exit2 means an incomplete/error scan and must block.
 No partial findings are emitted on an error. Never interpret an error as pass.
 
-Budgets: inherited20,000paths,4MiB inventory,2MiB/file,32MiB selected raw bytes
-per tree,10,000report locations,256introduced commits and a30second CLI alarm.
+Budgets: inherited 20,000 paths, 4 MiB inventory, 2 MiB/file, 32 MiB selected raw bytes
+per tree, 10,000 report locations, 256 introduced commits and a 30-second CLI alarm.
 Any binary/NUL/invalidUTF-8 selected blob, symlink/submodule, missing object,
 invalid ref, overflow or unsupported input fails closed. No fixture-directory,
 inline-comment or arbitrary path allowlist bypass exists. Diff text is forced
@@ -38,18 +38,18 @@ disabled in the shared Git reader; hooks, textconv and external diff are disable
 
 ## Detectors and limits
 
-- Israeli ID: bounded ASCII9digit candidates with the alternating1/2 checksum.
+- Israeli ID: bounded ASCII 9-digit candidates with the alternating 1/2 checksum.
   Repeated-digit sentinels are excluded by the existing shared checksum helper.
   No numeric ID of a real person is used in the tests; check-valid shapes are
   assembled from synthetic pieces at runtime.
-- Israeli mobile phones:05x plus7remaining digits or+9725x plus7digits, with
+- Israeli mobile phones: 05x plus 7 remaining digits or +9725x plus 7 digits, with
   optional single ASCII separators. These are shape checks, not subscriber
   lookup. There is no assumed safe Israeli mobile range. Existing reserved
-  +999 and NANPA555-0100..0199 fixture forms do not match this Israeli detector.
+  +999 and NANPA 555-0100..0199 fixture forms do not match this Israeli detector.
 - Emails: non-reserved domains. example.com/.net/.org and their subdomains,
   .test/.invalid/.localhost forms are safe fixture domains. Whole safe email
   tokens never exempt another same-line address.
-- Password assignments: nonempty password/passwd/pwd keys with=or: syntax,
+- Password assignments: nonempty password/passwd/pwd keys with = or : syntax,
   quoted or unquoted. Even dummy-looking nonempty assignments block. Empty
   values pass. This intentionally produces false positives in literal examples;
   assemble detection fixtures at runtime instead of adding bypass comments.
@@ -86,7 +86,7 @@ are changed here. No consumer hooks are installed by this PR.
 
 ## Explicit HMAC pseudonymization
 
-Create one local key outside every candidate repository, with mode0600, then
+Create one local key outside every candidate repository, with mode 0600, then
 keep it private and out of commits, logs, hosted CI and CircleCI:
 
 ```sh
@@ -104,11 +104,11 @@ constant and never emit a partially transformed request or original values.
 
 The reusable API is repo_checks.pseudonymize.pseudonym(kind,value,key). It uses
 HMAC-SHA256 with a versioned domain and kind separator. Names use NFC/casefold
-and collapsed whitespace; IDs require9ASCII digits; Israeli phone forms are
+and collapsed whitespace; IDs require 9 ASCII digits; Israeli phone forms are
 canonicalized. Outputs are typed ZZ_NAME_/ZZ_ID_/ZZ_PHONE_ plus letters only,
 not valid IDs or dialable phones. Same local key+normalized input gives the
 same value; a changed key changes results. No reversible mapping is stored.
-Keep the full256bit digest to avoid unnecessary truncation collisions.
+Keep the full 256-bit digest to avoid unnecessary truncation collisions.
 
 Pseudonyms still reveal equality/linkability within a key. HMAC is not
 anonymization, encryption or automatic removal of incidental identifying text.
