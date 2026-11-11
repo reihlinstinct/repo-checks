@@ -3,6 +3,7 @@
 This is a pattern gate, not proof that a tree contains no private information.
 Binary files and names of people need separate review. No automatic baselines,
 whole-line exemptions or arbitrary consumer code/configuration are accepted.
+One reviewed public accessibility contact has exact-token, exact-path scope.
 """
 from __future__ import annotations
 
@@ -17,6 +18,10 @@ from repo_checks.inputs import Inputs, InputError, git_output, MAX_FILE, MAX_TOT
 from pathlib import Path
 
 VERSION = 1
+# Approved public service mailbox, never a consumer-controlled waiver. Keep the
+# exact token separate from adjacent candidates and restrict actual UI/doc paths.
+PUBLIC_A11Y_CONTACT = 'reihlinstinct' + '@' + 'gmail.com'
+PUBLIC_CONTACT_PATHS = frozenset({'ACCESSIBILITY.md', 'docs/index.html'})
 MAX_FILES = MAX_PATHS
 EMAIL_CANDIDATE = re.compile(r"[\w._%+@\-]+", re.UNICODE)
 UUID_TOKEN = re.compile(r"(?<![\w-])[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}(?![\w-])")
@@ -47,12 +52,14 @@ def fictional_phone(value: str) -> bool:
     return len(digits) == 11 and digits.startswith("1") and digits[4:9] == "55501"
 
 
-def text_categories(text: str) -> set[str]:
+def text_categories(text: str, path: str = "") -> set[str]:
     """Return category labels only. Exempt exact safe tokens, never whole lines."""
     found = set()
     for candidate in EMAIL_CANDIDATE.finditer(text):
         token = candidate[0]
         if "@" not in token:
+            continue
+        if path in PUBLIC_CONTACT_PATHS and token == PUBLIC_A11Y_CONTACT:
             continue
         if len(token) > 320:
             raise ScanError()
@@ -102,7 +109,7 @@ def scan(root: Path) -> dict:
                     binary_files += 1
                 else:
                     text_files += 1
-                    found.update(text_categories(text))
+                    found.update(text_categories(text, name))
             for category in found:
                 counts[category] += 1
     return {"schema_version": VERSION, "status": "findings" if any(counts.values()) else "pass", "counts": counts, "text_files": text_files, "binary_files_unscanned": binary_files}

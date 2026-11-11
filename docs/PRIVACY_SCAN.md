@@ -42,3 +42,16 @@ review. Long email-shaped candidates fail closed rather than being skipped.
 Secret-sourced personal-name enforcement is a separate trusted action; see
 [PRIVATE_NAME_GUARD.md](PRIVATE_NAME_GUARD.md). It reports only fixed-schema status,
 never counts, locations, policy terms or source excerpts. The generic pattern gate remains value-free.
+
+
+## Reviewed public accessibility contact
+
+The scanner permits one exact public accessibility mailbox token, defined in
+trusted scanner source, only at root ACCESSIBILITY.md and docs/index.html.
+This is not a gmail-domain exemption or a consumer-configurable allowlist.
+The same mailbox in any other path still fails. Adjacent addresses, phone
+numbers, tokens and other private content remain scanned. Lookalike domains,
+changed mailbox spelling and appended address components do not inherit the
+exception. This is a deliberate publication policy, not an automatic baseline.
+Any additional mailbox or path requires its own review and permission.
+Refs #51. The action remains counts-only and text-only; binary review is separate.
