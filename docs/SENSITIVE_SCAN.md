@@ -124,3 +124,17 @@ fixture rescans, removed intermediate secrets, invalid/binary inputs, key-file
 rules, deterministic normalization, buffered CLI refusal and installed-hook
 candidate replacement isolation. The suite must remain green alongside existing
 checks. A review and green CI at the exact head remain the merge gate.
+
+
+### Explicit follow-up detection choices
+
+This change fixes non-LF diff separators without broadening detector policy or
+changing pseudonym identity rules. Known detection gaps include Hebrew-adjacent
+IDs; 972/00972 phone prefixes without plus; non-ASCII separators/digits and
+zero-width obfuscation; and prefixed assignment keys such as DB_PASSWORD.
+Those need separate focused detector changes and false-positive regressions.
+NFKC, zero-width removal and Unicode-digit folding are not enabled for masking:
+they would change stable identity equivalence and must be versioned explicitly
+rather than silently merging distinct inputs. NFC/casefold remains documented.
+Patch and fixture line numbers count LF only; CR/Unicode separators remain
+within a scanned line and cannot hide its later content.

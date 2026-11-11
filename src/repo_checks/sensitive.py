@@ -95,11 +95,11 @@ def scan_tree(root, ancestor, after):
         display = path if not path_findings and re.fullmatch(r'[A-Za-z0-9_./-]{1,240}', path) else '[withheld-path-' + str(index) + ']'
         findings = [(0, path_findings)] if path_findings else []
         if path in fixtures:
-            findings.extend((n, categories(line)) for n, line in enumerate(text.splitlines(), 1))
+            findings.extend((n, categories(line)) for n, line in enumerate(text.split('\n'), 1))
         else:
             patch = git_output(root, ['-c', 'core.quotePath=true', 'diff', '--no-ext-diff', '--no-textconv', '--no-color', '--text', '--unified=0', '--no-renames', ancestor, after, '--', path], 2 * MAX_FILE)
             line_number = None
-            for line in patch.decode('utf-8', errors='strict').splitlines():
+            for line in patch.decode('utf-8', errors='strict').split('\n'):
                 hunk = re.match(r'^@@ -[0-9]+(?:,[0-9]+)? \+([0-9]+)(?:,[0-9]+)? @@', line)
                 if hunk:
                     line_number = int(hunk[1])

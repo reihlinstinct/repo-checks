@@ -63,6 +63,16 @@ class DetectorTests(unittest.TestCase):
             with self.assertRaises(mask.MaskError):
                 mask.pseudonym(kind, value, key)
 
+    def test_domain_kind_and_full_digest_length(self):
+        value = identity()
+        # Compare the encoded payload, not just the already-distinct type prefix.
+        name = mask.pseudonym('name', value, b'Z' * 32).split('_', 2)[2]
+        ident = mask.pseudonym('id', value, b'Z' * 32).split('_', 2)[2]
+        self.assertNotEqual(name, ident)
+        self.assertEqual(64, len(name))
+        self.assertEqual(64, len(ident))
+        self.assertTrue(set(name + ident) <= set('abcdefghijklmnop'))
+
 
 class RepositoryTests(unittest.TestCase):
     def setUp(self):
@@ -233,6 +243,27 @@ class RepositoryTests(unittest.TestCase):
         self.git('add', '.')
         self.git('commit', '-qm', 'synthetic')
         self.assertEqual(2, self.cli().returncode)
+
+    def test_embedded_non_lf_separators_cannot_hide_added_values(self):
+        for index, sep in enumerate(('\u2028', '\x85', '\r', '\f', '\v', '\x1e', '\x1c', '\x1d', '\u2029')):
+            with self.subTest(separator=index):
+                self.git('reset', '--hard', self.base)
+                self.commit('added.txt', 'note' + sep + identity() + '\nnext' + sep + mobile() + '\nlast' + sep + token())
+                result = self.cli()
+                self.assertEqual(1, result.returncode)
+                found = json.loads(result.stdout)
+                self.assertEqual({'id', 'phone', 'secret'}, {i['category'] for i in found['locations']})
+                self.assertEqual({1, 2, 3}, {i['line'] for i in found['locations']})
+                self.commit('tests/fixtures/added.txt', 'note' + sep + identity() + '\nnext' + sep + mobile())
+                found = scan.scan(self.root, self.git('rev-parse', 'HEAD').strip())
+                self.assertEqual({1, 2}, {i['line'] for i in found['locations']})
+
+    def test_missing_key_cli_has_no_fallback_or_input_output(self):
+        value = json.dumps([{'kind': 'phone', 'value': mobile()}])
+        command = [sys.executable, '-I', str(ROOT / 'tools/repo_checks.py'), 'pseudonymize', '--root', str(self.root), '--key-file', str(Path(self.temp.name) / 'absent-key')]
+        run = subprocess.run(command, input=value, capture_output=True, text=True)
+        self.assertEqual((2, '{"status":"error"}\n', ''), (run.returncode, run.stdout, run.stderr))
+        self.assertNotIn(mobile(), run.stdout + run.stderr)
 
     def test_limit_and_alarm_fail_closed(self):
         self.commit('x.txt', 'safe')
