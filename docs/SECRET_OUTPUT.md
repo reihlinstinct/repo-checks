@@ -94,3 +94,28 @@ shared-pattern identity and the explicitly limited binary scope.
 Run `python3 -m unittest discover -s tests/security -v`. No token is sent to a
 provider to validate a test. Outputs and artifacts must never contain fixture
 values except deliberately assembled synthetic source.
+
+## Call-site inventory and no-bypass evidence
+
+Inventory scope: this repository's tracked `src/`, `tools/`, `actions/` and
+`.github/workflows/`, reviewed for `protect_text`, `protect_json`, `SECRET` and
+secret CLI invocations. No consumer-repository output integration is included.
+
+| Producer / entrypoint | Boundary and actual sink | Evidence / limit |
+| --- | --- | --- |
+| `tools/secret_output.py` | Isolated bootstrap calls `secret_output.main`; the full stdin buffer passes `protect_text` before any stdout bytes | CLI tests assert empty stdout on rejection, fixed stderr, explicit redaction, literal 2 MiB + 1 refusal, bounded read and broken pipe; upstream stderr/logging is outside this boundary |
+| `protect_json` API | Total serialized size is checked before copying; every string key/value passes `protect_text` | Tests reject many small strings exceeding total 2 MiB before the first copied string, nesting/type errors and collisions; no production caller exists here |
+| `tools/secret_scan.py` and CI `engine` | Isolated bootstrap calls `secret_scan.main`; fixed JSON result only | Tests pin the non-advisory `if: always()` CI invocation, reject candidate imports and inventory mutation, assert alarm(30) and alarm(0) on pass/error/timeout |
+| `actions/secrets/bootstrap.py` | Isolated trusted bootstrap calls the same scanner | Functional synthetic bootstrap tests run, but no workflow executes the composite `action.yml` itself yet |
+| `src/repo_checks/privacy.py` | Shared `SECRET` regex is used for classification, not output sanitization | Pattern-identity tests prevent regex drift; this is not an output call-site migration |
+
+There are zero migrated application log, transcript, file-save or mail-send
+producers. APIs alone do not cover those sinks. Each future producer needs a
+separate inventory of every write path and failure-path tests proving it cannot
+fall back to the unchecked original. Hosted output remains outside this code.
+
+Additional limits: supported PEM headers are only PRIVATE, RSA, EC and OPENSSH.
+ENCRYPTED, DSA, PGP and headerless key bodies are not recognized. Suppressed
+exception chaining does not erase Python's in-memory `__context__`; callers must
+not serialize raw exception objects. Split-across-writes, encoded, unknown and
+binary values remain outside the claim.

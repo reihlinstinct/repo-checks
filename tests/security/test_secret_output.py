@@ -64,6 +64,34 @@ class OutputTests(unittest.TestCase):
             with self.assertRaises(guard.SecretOutputError):
                 guard.protect_json(value)
 
+    def test_literal_two_mib_boundary_and_bounded_read(self):
+        limit = 2 * 1024 * 1024  # Deliberately independent of the implementation.
+        for args in ((), ('--redact',)):
+            result = self.cli(b'a' * (limit + 1), args)
+            self.assertEqual((2, b'', b'Secret output refused or unavailable\n'),
+                             (result.returncode, result.stdout, result.stderr))
+        buffer = io.BytesIO(b'a' * (limit + 1))
+        with patch.object(buffer, 'read', wraps=buffer.read) as read:
+            with patch('sys.stdin') as stdin, patch('sys.stdout', new_callable=io.StringIO) as out, patch('sys.stderr', new_callable=io.StringIO) as err:
+                stdin.buffer = buffer
+                self.assertEqual(2, guard.main([]))
+                self.assertEqual('', out.getvalue())
+                self.assertEqual('Secret output refused or unavailable\n', err.getvalue())
+            read.assert_called_once_with(limit + 1)
+        self.assertEqual(limit, len(guard.protect_text('a' * limit)))
+        with self.assertRaises(guard.SecretOutputError):
+            guard.protect_text('a' * (limit + 1))
+
+    def test_json_many_small_values_exceed_total_bound_before_copy(self):
+        value = ['a' * 1024 for _ in range(2048)]
+        self.assertGreater(len(json.dumps(value).encode()), 2 * 1024 * 1024)
+        for redact in (False, True):
+            with patch.object(guard, 'protect_text', wraps=guard.protect_text) as visit:
+                with self.assertRaises(guard.SecretOutputError):
+                    guard.protect_json(value, redact=redact)
+                visit.assert_not_called()
+        self.assertTrue(all(item == 'a' * 1024 for item in value))
+
     def test_clean_identity_and_invalid_text(self):
         self.assertEqual('safe עברית\n', guard.protect_text('safe עברית\n'))
         for value in [None, b'safe', '\ud800', 'a' * (guard.MAX_BYTES + 1)]:
@@ -172,11 +200,45 @@ class ScanTests(unittest.TestCase):
         self.assertNotIn('continue-on-error', text)
         self.assertIn('python3 -I', text)
 
-    def test_alarm_timeout_returns_constant_error(self):
-        original = secret_scan.signal.signal
-        with patch.object(secret_scan.signal, 'signal', wraps=original) as registered:
-            self.assertEqual('pass', secret_scan.scan(self.root)['status'])
-            with patch.object(secret_scan, 'scan', side_effect=RuntimeError('PRIVATE')), patch('sys.stdout', new_callable=io.StringIO) as out:
-                self.assertEqual(2, secret_scan.main(['--root', str(self.root)]))
-                self.assertNotIn('PRIVATE', out.getvalue())
-            self.assertTrue(registered.called)
+    def test_alarm_armed_and_disarmed_success_failure_and_timeout(self):
+        for mode in ('success', 'failure', 'timeout'):
+            with self.subTest(mode=mode):
+                with patch.object(secret_scan.signal, 'signal') as registered, patch.object(secret_scan.signal, 'alarm') as alarm:
+                    def fake_scan(_):
+                        if mode == 'timeout':
+                            registered.call_args.args[1](secret_scan.signal.SIGALRM, None)
+                        if mode == 'failure':
+                            raise RuntimeError('PRIVATE')
+                        return {'schema_version': 1, 'status': 'pass'}
+                    with patch.object(secret_scan, 'scan', side_effect=fake_scan), patch('sys.stdout', new_callable=io.StringIO) as out:
+                        self.assertEqual(0 if mode == 'success' else 2, secret_scan.main(['--root', str(self.root)]))
+                        self.assertEqual({'schema_version': 1, 'status': 'pass' if mode == 'success' else 'error'}, json.loads(out.getvalue()))
+                    registered.assert_called_once()
+                    self.assertEqual(secret_scan.signal.SIGALRM, registered.call_args.args[0])
+                    self.assertEqual([unittest.mock.call(30), unittest.mock.call(0)], alarm.call_args_list)
+
+    def test_inventory_mutation_mid_scan_fails_without_candidate_output(self):
+        self.track('first', b'safe')
+        original = secret_scan.Inputs.read_bytes
+        def changing(source, name):
+            data = original(source, name)
+            self.track('later', b'safe')
+            return data
+        with patch.object(secret_scan.Inputs, 'read_bytes', changing):
+            with self.assertRaises(secret_scan.InputError) as caught:
+                secret_scan.scan(self.root)
+            self.assertEqual('inventory_changed', str(caught.exception))
+        # Fresh start lets the same actual mutation exercise the public CLI path.
+        subprocess.run(['git', '-C', str(self.root), 'rm', '-f', '-q', 'later'], check=True)
+        with patch.object(secret_scan.Inputs, 'read_bytes', changing), patch('sys.stdout', new_callable=io.StringIO) as out:
+            self.assertEqual(2, secret_scan.main(['--root', str(self.root)]))
+            self.assertEqual('{"schema_version":1,"status":"error"}\n', out.getvalue())
+
+    def test_blocking_ci_entrypoint_cannot_be_advisory(self):
+        workflow = (ROOT / '.github/workflows/ci.yml').read_text()
+        section = workflow.split('      - name: Blocking secret-only text check\n', 1)[1].split('      - name:', 1)[0]
+        self.assertEqual('        if: always()\n        run: python3 -I tools/secret_scan.py --root .\n', section)
+        for entrypoint, module in [('tools/secret_output.py', 'secret_output'), ('tools/secret_scan.py', 'secret_scan')]:
+            text = (ROOT / entrypoint).read_text()
+            self.assertIn('from repo_checks.' + module + ' import main', text)
+            self.assertIn('raise SystemExit(main())', text)
