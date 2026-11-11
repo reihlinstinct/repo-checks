@@ -1,4 +1,8 @@
 """Synthetic policy only. Never place actual private terms in tests."""
+import base64
+import hashlib
+import hmac
+import unicodedata
 import importlib.util
 import json
 import os
@@ -14,6 +18,19 @@ sys.path.insert(0, str(ROOT / 'src'))
 from repo_checks import private_names as names
 from repo_checks import inputs
 from repo_checks import privacy
+from repo_checks import name_hmac_policy as hp
+
+SYNTHETIC_KEY = b'Z' * 32
+ENCODED_KEY = base64.b64encode(SYNTHETIC_KEY).decode('ascii')
+
+
+def synthetic_policy(terms):
+    entries = [{'length': len(text), 'digest': hp.term_digest(SYNTHETIC_KEY, text).hex()}
+               for text in {hp.validate_term(term) for term in terms}]
+    value = {'schema': hp.SCHEMA, 'unicode_version': unicodedata.unidata_version,
+             'entries': sorted(entries, key=lambda entry: entry['digest'])}
+    value['policy_mac'] = hmac.digest(SYNTHETIC_KEY, hp.POLICY_LABEL + hp.canonical(value), hashlib.sha256).hex()
+    return json.dumps(value)
 
 
 class PrivateNameTests(unittest.TestCase):
@@ -22,7 +39,8 @@ class PrivateNameTests(unittest.TestCase):
         self.root = Path(self.temp.name) / 'candidate'
         self.root.mkdir()
         subprocess.run(['git', 'init', '-q', str(self.root)], check=True)
-        self.policy = json.dumps(['ZZAlpha', 'ZZSurname', 'זזבדיקה', 'ZZFull ZZName'])
+        self.terms = ['ZZAlpha', 'ZZSurname', 'זזבדיקה', 'ZZFull ZZName']
+        self.policy = synthetic_policy(self.terms)
 
     def tearDown(self):
         self.temp.cleanup()
@@ -34,9 +52,11 @@ class PrivateNameTests(unittest.TestCase):
 
     def cli(self, policy=None, action=False, extra=None):
         env = os.environ.copy()
-        env.pop(names.ENV_KEY, None)
+        for secret in hp.SENSITIVE_ENV_KEYS:
+            env.pop(secret, None)
         if policy is not None:
             env[names.ENV_KEY] = policy
+            env[names.KEY_ENV] = ENCODED_KEY
         if extra:
             env.update(extra)
         if action:
@@ -61,11 +81,12 @@ class PrivateNameTests(unittest.TestCase):
         self.assertIn('phone', privacy.text_categories('ZZ' + uuid))
 
     def test_normalized_boundaries_not_substrings(self):
-        pattern = names.load_policy(self.policy)
         for text in ['zzalpha', 'ZZSURNAME.', '(זזבדיקה)', 'ＺＺＡｌｐｈａ', 'ZZFull ZZName']:
-            self.assertIsNotNone(pattern.search(names.normalize(text)))
+            self.track('fixture.txt', text)
+            self.assertEqual(1, self.cli(self.policy).returncode)
         for text in ['ZZAlphaProject', 'myZZSurname', 'prefix_zzalpha', 'ZZFull ZZNames']:
-            self.assertIsNone(pattern.search(names.normalize(text)))
+            self.track('fixture.txt', text)
+            self.assertEqual(0, self.cli(self.policy).returncode)
 
     def test_status_only_and_terms_never_echoed(self):
         self.track('fixture.txt', 'safe\nZZAlpha value\nזזבדיקה\n')
@@ -74,7 +95,7 @@ class PrivateNameTests(unittest.TestCase):
         data = json.loads(result.stdout)
         self.assertEqual({'schema_version': 1, 'status': 'findings'}, data)
         self.assertNotIn('fixture.txt', result.stdout)
-        for term in json.loads(self.policy):
+        for term in self.terms:
             self.assertNotIn(term, result.stdout + result.stderr)
         self.assertNotIn('value', result.stdout + result.stderr)
         self.assertEqual('', result.stderr)
@@ -88,7 +109,7 @@ class PrivateNameTests(unittest.TestCase):
         self.assertNotIn('line', result.stdout)
 
     def test_policy_missing_invalid_empty_or_wrong_shape_errors(self):
-        for policy in [None, '', '[]', '{}', 'null', '[1]', '[true]', '[" "]', '["ZZBad\\nTerm"]', '["ZZBad\\u0000Term"]', self.policy * 500]:
+        for policy in [None, '', '[]', '{}', 'null', '[1]', '[true]', '[" "]', '["ZZBad\\nTerm"]', '["ZZBad\\u0000Term"]', ' ' * 32769]:
             with self.subTest(policy_type=type(policy).__name__):
                 result = self.cli(policy)
                 self.assertEqual(2, result.returncode)
@@ -143,7 +164,7 @@ class PrivateNameTests(unittest.TestCase):
                     names.ENV_KEY: self.policy, 'GITHUB_WORKSPACE': workspace,
                     'CHECK_ROOT': root}), contextlib.redirect_stdout(io.StringIO()) as out:
                 self.assertEqual(2, bootstrap.main())
-                self.assertNotIn(names.ENV_KEY, os.environ)
+                self.assertTrue(all(key not in os.environ for key in hp.SENSITIVE_ENV_KEYS))
                 self.assertEqual({'schema_version': 1, 'status': 'error'}, json.loads(out.getvalue()))
 
     def test_candidate_python_git_and_env_never_execute(self):
@@ -166,7 +187,7 @@ class PrivateNameTests(unittest.TestCase):
         def launch(*args, **kwargs):
             seen.append(kwargs['env'])
             return original(*args, **kwargs)
-        with patch.dict(os.environ, {names.ENV_KEY: self.policy}), patch.object(inputs.subprocess, 'Popen', side_effect=launch):
+        with patch.dict(os.environ, {names.ENV_KEY: self.policy, names.KEY_ENV: ENCODED_KEY}), patch.object(inputs.subprocess, 'Popen', side_effect=launch):
             with inputs.Inputs(self.root):
                 pass
         self.assertTrue(seen)
@@ -201,7 +222,7 @@ class PrivateNameTests(unittest.TestCase):
 
     def test_main_removes_secret_from_python_environment(self):
         import contextlib, io
-        with patch.dict(os.environ, {names.ENV_KEY: self.policy}), contextlib.redirect_stdout(io.StringIO()):
+        with patch.dict(os.environ, {names.ENV_KEY: self.policy, names.KEY_ENV: ENCODED_KEY}), contextlib.redirect_stdout(io.StringIO()):
             self.assertEqual(0, names.main(['--root', str(self.root)]))
             self.assertNotIn(names.ENV_KEY, os.environ)
 
@@ -222,7 +243,7 @@ class PrivateNameTests(unittest.TestCase):
             return original(root, args, *rest)
         with patch.object(names, 'git_output', side_effect=staged):
             with self.assertRaises(inputs.InputError):
-                names.scan(self.root, names.load_policy(self.policy))
+                names.scan(self.root, names.load_policy(self.policy, ENCODED_KEY))
 
     def test_nonregular_inventory_mode_is_rejected_before_reading(self):
         self.track('item', 'safe')
@@ -233,7 +254,7 @@ class PrivateNameTests(unittest.TestCase):
             return original(root, args, *rest)
         with patch.object(names, 'git_output', side_effect=staged):
             with self.assertRaises(inputs.InputError):
-                names.scan(self.root, names.load_policy(self.policy))
+                names.scan(self.root, names.load_policy(self.policy, ENCODED_KEY))
 
     def test_utf8_prefix_boundary_not_false_binary(self):
         self.track('boundary.txt', 'a' * 8191 + 'é' + ' ZZAlpha')

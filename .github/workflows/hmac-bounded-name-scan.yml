@@ -1,0 +1,29 @@
+name: Synthetic bounded name scan
+on:
+  pull_request:
+    paths:
+      - src/repo_checks/private_names.py
+      - src/repo_checks/name_hmac_policy.py
+      - src/repo_checks/name_hmac_work.py
+      - src/repo_checks/inputs.py
+      - actions/private-names/**
+      - tools/benchmark_bounded_name_scan.py
+      - tests/security/test_name_hmac.py
+      - tests/security/test_private_names.py
+      - .github/workflows/hmac-bounded-name-scan.yml
+permissions:
+  contents: read
+jobs:
+  bounded-benchmark:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - name: Repeated synthetic full scanner runs
+        run: python3 -I tools/benchmark_bounded_name_scan.py
+      - name: Scope summary
+        if: always()
+        run: |
+          printf '%s\n' '## Synthetic bounded name scan' 'Generated temporary Git repositories and public dummy key only. Secure reader, both passes, normalization, budgets and hashing run end to end. Fresh interpreter each repetition; OS cache is not flushed. No actual policy or consumer configuration is accessed. Timing validates only these synthetic workloads.' >> "$GITHUB_STEP_SUMMARY"

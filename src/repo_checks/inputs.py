@@ -8,6 +8,8 @@ import stat
 import subprocess
 import time
 
+from repo_checks.name_hmac_policy import SENSITIVE_ENV_KEYS
+
 
 class InputError(Exception):
     """Fixed, value-free input refusal."""
@@ -21,7 +23,7 @@ MAX_TOTAL = 32 * 1024 * 1024
 
 def git_output(root: Path, args: list[str], cap: int = MAX_INVENTORY) -> bytes:
     # Do not inherit repository routing, external diff/pager or injected config.
-    env = {k: v for k, v in os.environ.items() if not k.startswith('GIT_') and k != 'PRIVATE_NAME_TERMS_JSON'}
+    env = {k: v for k, v in os.environ.items() if not k.startswith('GIT_') and k not in SENSITIVE_ENV_KEYS}
     env.update(GIT_CONFIG_NOSYSTEM='1', GIT_CONFIG_GLOBAL=os.devnull,
                GIT_TERMINAL_PROMPT='0', GIT_OPTIONAL_LOCKS='0')
     command = ['git', '-c', 'core.fsmonitor=false', '-c', 'core.hooksPath=' + os.devnull,
