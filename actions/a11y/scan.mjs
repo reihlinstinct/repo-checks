@@ -36,6 +36,21 @@ export function summarize(results) {
     incomplete: results.incomplete.length, rules: ids };
 }
 
+// Kept separately testable: defense-in-depth checks still matter if routing changes.
+export function watchPage(page, origin, state) {
+  page.on('request', request => {
+    if (new URL(request.url()).origin !== origin) state.blocked = true;
+  });
+  page.on('pageerror', () => { state.pageError = true; });
+  page.on('response', response => { if (response.status() >= 400) state.pageError = true; });
+}
+
+export function assertNavigation(response, url, origin, state) {
+  if (!response || !response.ok() || new URL(url).origin !== origin || state.blocked || state.pageError) {
+    throw new Error('preview failed');
+  }
+}
+
 export async function scan(base, config, options = {}) {
   const { origin, paths } = validate(base, config);
   const reports = [];
@@ -45,24 +60,41 @@ export async function scan(base, config, options = {}) {
       for (const viewport of VIEWPORTS) {
         const context = await browser.newContext({ viewport, serviceWorkers: 'block', bypassCSP: true });
         try {
-          let blocked = false;
-          let pageError = false;
+          const state = { blocked: false, pageError: false };
           await context.route('**/*', async route => {
-            if (new URL(route.request().url()).origin !== origin) {
-              blocked = true;
-              await route.abort();
-            } else await route.continue();
+            try {
+              let target = route.request().url();
+              // Fetch redirect hops ourselves: browser redirect hops skip routing.
+              for (let hop = 0; hop < 10; hop++) {
+                if (new URL(target).origin !== origin) {
+                  state.blocked = true;
+                  await route.abort();
+                  return;
+                }
+                const response = await route.fetch({ url: target, maxRedirects: 0, timeout: 15000 });
+                const location = response.headers()['location'];
+                if (response.status() >= 300 && response.status() < 400 && location) {
+                  target = new URL(location, target).href;
+                } else {
+                  await route.fulfill({ response });
+                  return;
+                }
+              }
+              throw new Error('redirect limit');
+            } catch { state.blocked = true; await route.abort(); }
+          });
+          // WebSocket routing is separate from HTTP routing.
+          await context.routeWebSocket('**/*', socket => {
+            state.blocked = true;
+            socket.close();
           });
           const page = await context.newPage();
-          page.on('pageerror', () => { pageError = true; });
-          page.on('response', response => { if (response.status() >= 400) pageError = true; });
+          watchPage(page, origin, state);
           page.setDefaultTimeout(15000);
           page.setDefaultNavigationTimeout(15000);
           for (let index = 0; index < paths.length; index++) {
             const response = await page.goto(origin + paths[index], { waitUntil: 'networkidle' });
-            if (!response || !response.ok() || new URL(page.url()).origin !== origin || blocked || pageError) {
-              throw new Error('preview failed');
-            }
+            assertNavigation(response, page.url(), origin, state);
             await page.evaluate(() => document.fonts.ready);
             await page.addScriptTag({ content: axe.source });
             const result = await page.evaluate(async tags => {
@@ -71,7 +103,7 @@ export async function scan(base, config, options = {}) {
                 new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 15000))
               ]);
             }, TAGS);
-            if (blocked || pageError) throw new Error('preview request or script failure');
+            if (state.blocked || state.pageError) throw new Error('preview request or script failure');
             const report = { engine, width: viewport.width, page: index + 1, ...summarize(result) };
             reports.push(report);
             // Test-only inspection hook; the CLI/action never enables screenshots.

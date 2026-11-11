@@ -61,7 +61,11 @@ add their own axe tests after opening menus/dialogs, validating forms, loading
 results, or other interactions. A homepage-only scan is not full UI coverage.
 Remote dependencies should be bundled locally for deterministic tests. The test
 browser bypasses Content Security Policy solely to inject axe; production CSP
-is not changed or audited by this action.
+is not changed or audited by this action. This bypass can enable inline code
+that production CSP would block, so test results must be compared with the
+production-CSP browser smoke tests. HTTP redirects are inspected before each
+fetch and WebSockets are blocked; this remains a browser test, not a network
+sandbox (DNS-prefetch and other browser side channels are not certified).
 
 Example reviewed route manifest:
 
