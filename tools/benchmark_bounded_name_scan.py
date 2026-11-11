@@ -40,6 +40,9 @@ def main():
         'dense_words': ['a a ' * 15000] * 2,
         # Approximately 2m candidates and 2m normalized points together.
         'near_caps': ['a a ' * 15632] * 2 + ['😀' * 234300] * 8,
+        # Two near-1MB files: dense endpoints, alphabetic character at line end.
+        'at_cap_starts': [('.' * 30 + 'a\n') * 32000] * 2,
+        'single_point_finding': ['(ǻ)'],
         'prose': ['ZZAlpha met ZZBeta. ' * 10000] * 2,
         'nonascii_points': ['😀' * 249900] * 8,
         'many_lines': ['a\n' * 49000] * 2,
@@ -62,9 +65,10 @@ def main():
                     run = subprocess.run([sys.executable, '-I', str(ROOT / 'tools/private_name_scan.py'),
                                           '--root', str(root)], env=env, capture_output=True, text=True, timeout=35)
                     elapsed = time.perf_counter() - start
-                    expected = 2 if corpus == 'over_budget' else 0
+                    expected = (2 if corpus == 'over_budget' else
+                                1 if corpus == 'single_point_finding' and shape in ('minimum', 'dense') else 0)
                     if run.returncode != expected or run.stderr or json.loads(run.stdout) != {
-                            'schema_version': 1, 'status': 'error' if expected == 2 else 'pass'}:
+                            'schema_version': 1, 'status': {0: 'pass', 1: 'findings', 2: 'error'}[expected]}:
                         raise RuntimeError('Synthetic end-to-end benchmark failed')
                     print(json.dumps({'kind': 'end_to_end', 'corpus': corpus, 'shape': shape,
                                       'repeat': repeat, 'seconds': elapsed,

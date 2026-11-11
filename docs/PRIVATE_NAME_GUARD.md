@@ -110,7 +110,10 @@ the armed/cancelled alarm. Existing secure-reader regressions remain.
 repositories and public dummy policies in memory, then runs the actual isolated
 CLI repeatedly. It covers dense words, prose, near-aggregate normalized non-ASCII
 text, many lines, normalization expansion, combined near-candidate/normalized-point
-caps and over-budget errors. Output contains
+caps, two near-1MB dense-dot/line-final-letter files, one-normalized-code-point
+findings and over-budget errors. The dense-dot shape uses two files, each 32000 repeats of 30 dots, an ASCII
+letter and a newline. It reproduces the independently reported synthetic recipe
+on the actual runner, without treating the earlier local timing as runner proof. Output contains
 synthetic corpus identifiers, runtime/Unicode versions, elapsed times and expected
 exit codes only. Each repetition starts a fresh interpreter; OS caches are not
 flushed. The benchmark neither reads actual policies nor changes configuration.
