@@ -8,6 +8,8 @@ permissions:
 jobs:
   a11y:
     runs-on: ubuntu-24.04
+    container:
+      image: mcr.microsoft.com/playwright:v1.65.0-noble@sha256:9beb546099e11f52d62e505537914870e01a67e0e6b00ae41da4775324e73dbe
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -21,7 +23,8 @@ jobs:
         working-directory: actions/a11y
         run: |
           npm ci --ignore-scripts --no-audit --no-fund
-          npx --no-install playwright install --with-deps chromium webkit
+          node runtime.mjs
+          node --test runtime.test.mjs
       - name: Synthetic positive and negative matrix
         working-directory: actions/a11y
         run: npm test

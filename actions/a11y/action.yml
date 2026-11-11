@@ -4,6 +4,10 @@ inputs:
   base-url:
     description: Local HTTP preview origin (localhost or 127.0.0.1), without a path.
     required: true
+  browser-runtime:
+    description: "install (default), or preinstalled in a reviewed version-matched runtime; both fail on browser errors."
+    required: false
+    default: install
   config:
     description: Absolute path to reviewed version1 JSON route manifest.
     required: true
@@ -18,10 +22,15 @@ runs:
       shell: bash
       env:
         TRUSTED_ACTION: ${{ github.action_path }}
+        BROWSER_RUNTIME: ${{ inputs.browser-runtime }}
       run: |
+        case "$BROWSER_RUNTIME" in install|preinstalled) ;; *) echo "Invalid browser runtime"; exit 2 ;; esac
         cd "$TRUSTED_ACTION"
         npm ci --ignore-scripts --no-audit --no-fund
-        npx --no-install playwright install --with-deps chromium webkit
+        if [ "$BROWSER_RUNTIME" = install ]; then
+          npx --no-install playwright install --with-deps chromium webkit
+        fi
+        node runtime.mjs
     - name: Check local preview
       shell: bash
       env:
