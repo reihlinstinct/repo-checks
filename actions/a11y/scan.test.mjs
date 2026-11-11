@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { validate, summarize, scan, TAGS } from './scan.mjs';
 
-const good = '<!doctype html><html lang="en"><meta charset="utf-8"><title>ZZ fixture</title><body><main><h1>ZZ form</h1><label for="zz-input">ZZ field</label><input id="zz-input"><button>ZZ submit</button></main></body></html>';
+const good = '<!doctype html><html lang="en"><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src &#39;self&#39;; script-src &#39;self&#39;"><title>ZZ fixture</title><body><main><h1>ZZ form</h1><label for="zz-input">ZZ field</label><input id="zz-input"><button>ZZ submit</button></main></body></html>';
 const bad = '<!doctype html><html><body><main><img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"><button></button></main></body></html>';
 const config = { version: 1, paths: ['/'] };
 

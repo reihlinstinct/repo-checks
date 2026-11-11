@@ -43,7 +43,7 @@ export async function scan(base, config, options = {}) {
     const browser = await type.launch();
     try {
       for (const viewport of VIEWPORTS) {
-        const context = await browser.newContext({ viewport, serviceWorkers: 'block' });
+        const context = await browser.newContext({ viewport, serviceWorkers: 'block', bypassCSP: true });
         try {
           let blocked = false;
           let pageError = false;

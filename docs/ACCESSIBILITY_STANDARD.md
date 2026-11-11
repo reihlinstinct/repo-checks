@@ -59,7 +59,9 @@ The manifest must cover all pages, languages (including RTL) and supported URL
 states in scope. The shared action scans page-load states only. Projects must
 add their own axe tests after opening menus/dialogs, validating forms, loading
 results, or other interactions. A homepage-only scan is not full UI coverage.
-Remote dependencies should be bundled locally for deterministic tests.
+Remote dependencies should be bundled locally for deterministic tests. The test
+browser bypasses Content Security Policy solely to inject axe; production CSP
+is not changed or audited by this action.
 
 Example reviewed route manifest:
 
