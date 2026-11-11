@@ -18,14 +18,16 @@ flowchart LR
 
 The caller must run on workflow_run for the completed privacy-request.yml run,
 from its default branch, and call the reusable workflow at the full landed SHA.
-Store PRIVATE_NAME_TERMS_JSON only as a privacy-policy environment secret.
-No repository or organization secret of that name may exist: candidate workflows
-could read it outside the protected environment. Forward the name explicitly,
+Store PRIVATE_NAME_HMAC_POLICY_JSON and PRIVATE_NAME_HMAC_KEY_B64 only as
+privacy-policy environment secrets. The legacy PRIVATE_NAME_TERMS_JSON is not
+forwarded and must never be supplied to the new scanner.
+No repository or organization secret of either new name may exist: candidate workflows
+could read it outside the protected environment. Forward both names explicitly,
 even when no repository/organization value exists; never use secrets: inherit. The
 privacy-policy environment belongs to the caller repository and must allow only
 its exact default branch, with no tag rule and no reviewer or administrator
 bypass. Only the
-trusted scan step receives the policy. Candidate code is never executed.
+trusted scan step receives the policy and key. Candidate code is never executed.
 
 Binding requires a public repository, completed pull_request request run,
 numeric run/repository IDs and full lowercase candidate SHA. The source run is
@@ -58,7 +60,13 @@ by these unit tests: the first consumer must prove them before wider adoption.
 
 Secret resolution follows the [GitHub reusable workflow documentation](https://docs.github.com/en/actions/how-tos/reuse-automations/reuse-workflows).
 The first consumer must prove environment-only secret resolution with a synthetic
-policy before actual-policy adoption. That proof must verify the policy is
+policy/key pair before actual-policy adoption. That proof must verify both values are
 nonempty in the trusted scan step only and empty in every other job/step, using
 value-free assertions rather than printing it. No repository/organization
 duplicate may be created to make that proof pass.
+
+The HMAC actions are pinned to landed scanner commit
+`eeb45016361705d34ae212b0b615351f81cac9cd`. This reusable-workflow change does
+not create secrets, run conversion, change consumers or set required statuses.
+Missing or malformed values fail closed. Actual conversion and its verification
+use a separately reviewed execution path; a code merge alone does not run it.

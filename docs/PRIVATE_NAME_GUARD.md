@@ -2,10 +2,9 @@
 
 The current source is a synthetic-only HMAC implementation for
 [design issue 33](https://github.com/reihlinstinct/repo-checks/issues/33).
-The reusable workflow still pins the earlier plaintext scanner commit. This
-change does not update that pin or install the new scanner for any consumer.
-Integration forwarding and pins require a separate reviewed change after this
-scanner lands. Actual-list conversion and installation remain held.
+The reusable workflow pins this landed HMAC scanner and forwards the two
+protected values explicitly. This does not install the scanner for any consumer
+or run actual-list conversion. Conversion needs its own reviewed execution path.
 
 ## Protected policy
 
@@ -118,6 +117,6 @@ synthetic corpus identifiers, runtime/Unicode versions, elapsed times and expect
 exit codes only. Each repetition starts a fresh interpreter; OS caches are not
 flushed. The benchmark neither reads actual policies nor changes configuration.
 
-[Trusted integration requirements](PRIVATE_NAME_WORKFLOW.md) describe the earlier
-pinned integration. A follow-up must update its secret map and both landed pins;
-required-status changes, binary policy and actual-list migration remain separate.
+[Trusted integration requirements](PRIVATE_NAME_WORKFLOW.md) describe explicit
+HMAC forwarding and landed pins. Required-status changes, binary policy and
+actual-list migration remain separate execution stages.
