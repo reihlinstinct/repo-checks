@@ -52,3 +52,10 @@ intercept hosted transcripts or mail automatically. Coverage requires explicit
 integration before each controlled output. Binary and unknown/encoded token
 formats remain outside the text-only recognition scope. Existing privacy/name
 checks are separate; no consumer settings are changed by this implementation.
+
+## Local sensitive-data gate
+
+Use the offline committed-diff scanner and optional local pre-push hook before
+merging synthetic-data work. See [local sensitive scan](docs/SENSITIVE_SCAN.md)
+for scope, failure handling, deterministic local HMAC pseudonyms and limitations.
+No real data or pseudonymization key belongs in hosted CI.
