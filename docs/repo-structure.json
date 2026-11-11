@@ -6,7 +6,8 @@
     "CONTRIBUTING.md",
     "CODE_OF_CONDUCT.md",
     ".gitignore",
-    ".repo-layout.yml"
+    ".repo-layout.yml",
+    "ACCESSIBILITY.md"
   ],
   "directories": {
     ".github": [
@@ -22,7 +23,9 @@
     ],
     "actions": [
       ".py",
-      ".yml"
+      ".yml",
+      ".mjs",
+      ".json"
     ],
     "tools": [
       ".py"
@@ -38,7 +41,8 @@
     "SECURITY.md",
     "CONTRIBUTING.md",
     "CODE_OF_CONDUCT.md",
-    ".gitignore"
+    ".gitignore",
+    "ACCESSIBILITY.md"
   ],
   "forbidden_paths": [
     ".env",
@@ -54,7 +58,8 @@
       "check_structure.py"
     ],
     "docs": [
-      "repo-structure.json"
+      "repo-structure.json",
+      "ACCESSIBILITY_STANDARD.md"
     ],
     "tests": [
       "security/test_privacy.py",

@@ -59,3 +59,13 @@ Use the offline committed-diff scanner and optional local pre-push hook before
 merging synthetic-data work. See [local sensitive scan](docs/SENSITIVE_SCAN.md)
 for scope, failure handling, deterministic local HMAC pseudonyms and limitations.
 No real data or pseudonymization key belongs in hosted CI.
+
+## Accessibility standard and CI action
+
+Use the [a11y engineering standard](docs/ACCESSIBILITY_STANDARD.md) for new code
+and maintenance. Every repository requires [ACCESSIBILITY.md](ACCESSIBILITY.md).
+The `actions/a11y` composite action runs locked axe-core/Playwright against a
+local synthetic preview in Chromium and WebKit at desktop/mobile widths.
+Violations and tool errors fail CI; reports contain counts and rule IDs only.
+Manual testing, dynamic UI states, native OS testing and SI 5568 national changes
+remain outside this automated gate. No compliance certification is claimed.

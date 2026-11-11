@@ -1,0 +1,16 @@
+{
+  "name": "a11y",
+  "version": "1.0.0",
+  "dependencies": {
+    "axe-core": "4.14.0",
+    "playwright": "1.65.0"
+  },
+  "private": true,
+  "license": "MIT",
+  "scripts": {
+    "test": "node --test scan.test.mjs"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}
