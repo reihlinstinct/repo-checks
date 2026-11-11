@@ -30,3 +30,17 @@ inline grep. See [scope, limits and exit codes](docs/PRIVACY_SCAN.md).
 The [isolated privacy action](docs/PRIVACY_ACTION.md) is the consumer boundary.
 Pin the reviewed action commit, retain existing guards during the first shadow
 pilot, and do not treat mocked/local tests as real consumer proof.
+
+
+## Authenticated name guard (staged)
+
+The [HMAC name guard](docs/PRIVATE_NAME_GUARD.md) accepts an authenticated keyed
+policy and uses deterministic public work caps and a two-pass matcher. This is a
+synthetic-only implementation stage. The existing reusable workflow remains pinned
+to the earlier scanner; new secret forwarding and landed pins require a separate
+reviewed integration change. No actual policy conversion or consumer rollout is
+included. Run the generated-corpus end-to-end measurement with:
+
+```sh
+python3 -I tools/benchmark_bounded_name_scan.py
+```

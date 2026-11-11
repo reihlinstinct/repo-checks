@@ -104,15 +104,15 @@ class MeasurementContractTests(unittest.TestCase):
         self.assertEqual(3, b.work_counts('ab\u2028cd', 10)[0])
 
     def test_rules_equal_current_scanner_on_synthetic_cases(self):
-        from repo_checks import private_names
+        from repo_checks import private_names, name_hmac_policy
         for raw in ['ZZAlpha', 'ZZFull ZZName', '\ufdfa', '\u0130', ' a', 'a\u200b', 'ab\u2028cd']:
             self.assertEqual(private_names.normalize(raw), b.normalize(raw))
             try:
-                private_names.load_policy(__import__('json').dumps([raw]))
+                name_hmac_policy.validate_term(raw)
                 valid = True
             except Exception:
                 valid = False
-            self.assertEqual(valid, 2 <= len(raw) <= 128 and b.admissible(b.normalize(raw)))
+            self.assertEqual(valid, 2 <= len(raw) <= 128 and len(b.normalize(raw)) <= 64 and b.admissible(b.normalize(raw)))
 
     def test_workflow_is_exact_read_only_synthetic_lane(self):
         text = (ROOT / '.github/workflows/hmac-benchmark.yml').read_text()

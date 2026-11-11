@@ -22,7 +22,8 @@ def main():
         from repo_checks.private_names import main as check
         return check(['--root=' + str(root)])
     except Exception:
-        os.environ.pop('PRIVATE_NAME_TERMS_JSON', None)
+        for key in ('PRIVATE_NAME_TERMS_JSON', 'PRIVATE_NAME_HMAC_POLICY_JSON', 'PRIVATE_NAME_HMAC_KEY_B64'):
+            os.environ.pop(key, None)
         print('{"schema_version":1,"status":"error"}')
         return 2
 
