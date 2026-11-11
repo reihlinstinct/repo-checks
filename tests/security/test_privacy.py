@@ -20,6 +20,37 @@ class PrivacyTests(unittest.TestCase):
         self.assertEqual(set(), p.text_categories('test@example.invalid'))
         self.assertEqual({'email'}, p.text_categories('test@example.invalid contact ' + 'fixture' + '@' + 'private.test'))
 
+    def test_exact_public_contact_only_at_reviewed_paths(self):
+        contact = p.PUBLIC_A11Y_CONTACT
+        for path in ['ACCESSIBILITY.md', 'docs/index.html']:
+            for wrapper in [contact, 'mailto:' + contact, '<a href="mailto:' + contact + '">contact</a>']:
+                self.assertNotIn('email', p.text_categories(wrapper, path))
+            for other in ['zz-private' + '@' + 'gmail.com', 'zz-private' + '@' + 'walla.co.il',
+                          'reihlinstinct' + '@' + 'gmail.com.invalid.test',
+                          'reihlinstinct' + '@' + 'gmai1.com',
+                          'x' + contact, contact + '.test', contact.upper(),
+                          contact + '@' + 'private.test']:
+                self.assertIn('email', p.text_categories(other, path))
+                self.assertIn('email', p.text_categories(contact + ' ' + other, path))
+        for path in ['', 'README.md', 'src/contact.py', 'docs/other.html',
+                     'sub/ACCESSIBILITY.md', './ACCESSIBILITY.md', 'docs/../ACCESSIBILITY.md']:
+            self.assertIn('email', p.text_categories(contact, path))
+        self.assertIn('secret', p.text_categories(contact + ' ghp_' + 'Z' * 36, 'docs/index.html'))
+        self.assertIn('phone', p.text_categories(contact + ' ' + '050' + '1234567', 'docs/index.html'))
+
+    def test_public_contact_path_is_propagated_by_real_cli(self):
+        with tempfile.TemporaryDirectory() as d:
+            root = self.make_repo(d)
+            (root / 'ACCESSIBILITY.md').write_text('mailto:' + p.PUBLIC_A11Y_CONTACT)
+            subprocess.run(['git', '-C', d, 'add', '.'], check=True)
+            self.assertEqual(0, self.run_cli(root).returncode)
+            (root / 'README.md').write_text(p.PUBLIC_A11Y_CONTACT)
+            subprocess.run(['git', '-C', d, 'add', '.'], check=True)
+            result = self.run_cli(root)
+            self.assertEqual(1, result.returncode)
+            self.assertEqual(1, json.loads(result.stdout)['counts']['email'])
+            self.assertNotIn(p.PUBLIC_A11Y_CONTACT, result.stdout + result.stderr)
+
     def test_fictional_phone(self):
         for value in ['+1-202-555-0100', '+1-415-555-0199', '+999-123-456-7890']:
             self.assertNotIn('phone', p.text_categories(value))

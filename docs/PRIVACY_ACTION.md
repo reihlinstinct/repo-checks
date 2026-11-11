@@ -21,3 +21,7 @@ consumer that keeps the old required guard. Only after remote proof should
 individual public repositories adopt this gate. Findings require private
 triage; never auto-baseline, loosen checks or publish source values to pass.
 Binary/PDF/image contents still need review. Secret-sourced name enforcement uses the separate trusted private-names action documented in PRIVATE_NAME_GUARD.md.
+
+The scanner includes an exact-token, exact-path public accessibility-contact
+policy; see [scope and boundaries](PRIVACY_SCAN.md). Consumers cannot widen it
+through action inputs. Pin the reviewed scanner version before using it.
