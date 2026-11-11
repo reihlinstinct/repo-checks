@@ -69,3 +69,16 @@ local synthetic preview in Chromium and WebKit at desktop/mobile widths.
 Violations and tool errors fail CI; reports contain counts and rule IDs only.
 Manual testing, dynamic UI states, native OS testing and SI 5568 national changes
 remain outside this automated gate. No compliance certification is claimed.
+
+### Pinned browser runtime
+
+The default `browser-runtime: install` still installs Chromium/WebKit and their
+system dependencies. To avoid an apt mirror dependency, a caller may set
+`browser-runtime: preinstalled` in a reviewed, digest-pinned Playwright container
+matching `actions/a11y/package-lock.json`. The regression workflow shows the
+current image pin. Both modes launch and render in both engines before scanning;
+missing browsers, libraries or bad renders fail closed. No browser cache or
+skipped axe check is involved. Update the image digest and lockfile together
+and run the full synthetic positive/negative matrix. Containers run trusted
+synthetic previews only; they do not provide a network-isolation or conformance
+claim. See https://playwright.dev/docs/docker for runtime maintenance.
