@@ -22,7 +22,7 @@ EMAIL_CANDIDATE = re.compile(r"[\w._%+@\-]+", re.UNICODE)
 UUID_TOKEN = re.compile(r"(?<![\w-])[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}(?![\w-])")
 PHONE = re.compile(r"(?<![\w+])(?:972(?:[\s/–—.()-]{0,3}\d){9}|\+\d(?:[\s/–—.()-]{0,3}\d){7,14}\)?|00\d(?:[\s/–—.()-]{0,3}\d){7,14}\)?|\(?0[2-9](?:[\s/–—.()-]{0,3}\d){7,8}\)?)(?!\w)")
 ID = re.compile(r"(?<![\w.\-])\d{9}(?![\w\-]|\.\d)")
-SECRET = re.compile(r"gh[pousr]_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{40,}|xox[baprs]-[A-Za-z0-9-]{20,}|AKIA[A-Z0-9]{16}|-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----")
+from repo_checks.secret_output import SECRET
 SENSITIVE = re.compile(r"(?:^|/)(?:creds\.json|credentials\.json|app-state-sync-key[^/]*|session\.(?:json|db)|\.env|id_rsa|id_ed25519)$", re.I)
 CATEGORIES = ("email", "phone", "id", "secret", "sensitive_filename")
 

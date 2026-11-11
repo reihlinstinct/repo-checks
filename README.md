@@ -43,3 +43,12 @@ policy conversion or consumer rollout is included. Run the generated-corpus end-
 ```sh
 python3 -I tools/benchmark_bounded_name_scan.py
 ```
+
+## Secret-only controlled output and text gate
+
+The [secret-output APIs and blocking text action](docs/SECRET_OUTPUT.md) provide
+bounded block/redact helpers and a dedicated token-only check. They do not
+intercept hosted transcripts or mail automatically. Coverage requires explicit
+integration before each controlled output. Binary and unknown/encoded token
+formats remain outside the text-only recognition scope. Existing privacy/name
+checks are separate; no consumer settings are changed by this implementation.
