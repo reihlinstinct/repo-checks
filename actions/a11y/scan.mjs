@@ -76,12 +76,26 @@ export async function scan(base, config, options = {}) {
                 if (response.status() >= 300 && response.status() < 400 && location) {
                   target = new URL(location, target).href;
                 } else {
-                  await route.fulfill({ response });
+                  if (response.status() >= 300 && response.status() < 400) {
+                    throw new Error('unsupported redirect or conditional response');
+                  }
+                  // Speculation fetches bypass Playwright HTTP events. Reject
+                  // declarations before the browser parses HTML/scripts/headers.
+                  const body = await response.body();
+                  if (response.headers()['speculation-rules'] || /speculationrules/i.test(body.toString('utf8'))) {
+                    throw new Error('unsupported speculative resource');
+                  }
+                  await route.fulfill({ response, body });
                   return;
                 }
               }
               throw new Error('redirect limit');
-            } catch { state.blocked = true; await route.abort(); }
+            } catch {
+              state.blocked = true;
+              // fulfill/fetch can mark a route handled before rejecting. Never let
+              // cleanup throw out of the event handler and bypass fixed error JSON.
+              try { await route.abort(); } catch { /* handled route, still fail closed */ }
+            }
           });
           // WebSocket routing is separate from HTTP routing.
           await context.routeWebSocket('**/*', socket => {

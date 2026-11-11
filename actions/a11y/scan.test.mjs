@@ -5,6 +5,9 @@ import { spawnSync, spawn } from 'node:child_process';
 import { mkdtemp, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+const childEnv = { ...process.env };
+delete childEnv.FORCE_COLOR;
+delete childEnv.NO_COLOR;
 import { validate, summarize, scan, TAGS, watchPage, assertNavigation } from './scan.mjs';
 
 const good = '<!doctype html><html lang="en"><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src &#39;self&#39;; script-src &#39;self&#39;"><title>ZZ fixture</title><body><main><h1>ZZ form</h1><label for="zz-input">ZZ field</label><input id="zz-input"><button>ZZ submit</button></main></body></html>';
@@ -36,7 +39,7 @@ test('output strips HTML, selectors, URLs and messages', () => {
 
 test('CLI tool/config errors return 2 without leaking exception or path', () => {
   const run = spawnSync(process.execPath, ['scan.mjs'], { cwd: import.meta.dirname,
-    env: { ...process.env, FORCE_COLOR: '', A11Y_CONFIG: '/ZZ-missing-config-secret' }, encoding: 'utf8' });
+    env: { ...childEnv, A11Y_CONFIG: '/ZZ-missing-config-secret' }, encoding: 'utf8' });
   assert.equal(run.status, 2);
   assert.equal(run.stderr, '');
   assert.equal(JSON.parse(run.stdout).status, 'error');
@@ -81,7 +84,15 @@ test('browser matrix: clean fixture passes, missing names/alt/lang fails, 404/ex
   const externalURL = `http://127.0.0.1:${external.address().port}/`;
   const server = http.createServer((req, res) => {
     res.setHeader('Content-Type', 'text/html');
-    if (req.url === '/external-img') res.end(good.replace('</main>', `<img alt="ZZ pixel" src="${externalURL}"></main>`));
+    if (req.url === '/speculation') res.end(good.replace('</body>', `<script type="speculationrules">${JSON.stringify({ prefetch: [{ source: 'list', urls: [externalURL] }] })}</script></body>`));
+    else if (req.url === '/status304') { res.writeHead(304); res.end(); }
+    else if (req.url === '/status302') { res.writeHead(302); res.end(); }
+    else if (req.url === '/conditional-img') res.end(good.replace('</main>', '<img alt="ZZ pixel" src="/status304"></main>'));
+    else if (req.url === '/locationless-img') res.end(good.replace('</main>', '<img alt="ZZ pixel" src="/status302"></main>'));
+    else if (req.url === '/network-error') res.end(good.replace('</main>', '<img alt="ZZ pixel" src="/disconnect"></main>'));
+    else if (req.url === '/disconnect') req.socket.destroy();
+    else if (req.url === '/loop') { res.writeHead(302, { Location: '/loop' }); res.end(); }
+    else if (req.url === '/external-img') res.end(good.replace('</main>', `<img alt="ZZ pixel" src="${externalURL}"></main>`));
     else if (req.url === '/error') res.end(good.replace('</body>', '<script>throw new Error("ZZ failure")</script></body>'));
     else if (req.url === '/missing-img') res.end(good.replace('</main>', '<img alt="ZZ pixel" src="/404"></main>'));
     else if (req.url === '/redirect-img') res.end(good.replace('</main>', '<img alt="ZZ pixel" src="/redirect-local"></main>'));
@@ -115,6 +126,10 @@ test('browser matrix: clean fixture passes, missing names/alt/lang fails, 404/ex
     for (const path of ['/external-img', '/error', '/missing-img', '/redirect-img', '/redirect-local', '/nested-redirect', '/ws']) {
       await assert.rejects(scan(base, { version: 1, paths: [path] }), path);
     }
+    await assert.rejects(scan(base, { version: 1, paths: ['/speculation'] }));
+    for (const path of ['/conditional-img', '/locationless-img', '/network-error', '/loop']) {
+      await assert.rejects(scan(base, { version: 1, paths: [path] }), path);
+    }
     assert.equal(externalRequests, 0, 'no second-origin fetch, including redirect hops');
   } finally { await new Promise(resolve => server.close(resolve)); await new Promise(resolve => external.close(resolve)); }
 });
@@ -124,16 +139,20 @@ test('CLI actual browser exits 0/1 and reports are content-free', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'zz-a11y-'));
   const server = http.createServer((req, res) => {
     res.setHeader('Content-Type', 'text/html');
-    res.end(req.url === '/bad' ? bad : good);
+    if (req.url === '/status304') { res.writeHead(304); res.end(); }
+    else if (req.url === '/status302') { res.writeHead(302); res.end(); }
+    else if (req.url === '/conditional-img') res.end(good.replace('</main>', '<img alt="ZZ pixel" src="/status304"></main>'));
+    else if (req.url === '/locationless-img') res.end(good.replace('</main>', '<img alt="ZZ pixel" src="/status302"></main>'));
+    else res.end(req.url === '/bad' ? bad : good);
   });
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   const base = `http://127.0.0.1:${server.address().port}/`;
   try {
-    for (const [path, expected] of [['/', 0], ['/bad', 1]]) {
+    for (const [path, expected] of [['/', 0], ['/bad', 1], ['/conditional-img', 2], ['/locationless-img', 2]]) {
       const configPath = join(dir, 'config.json');
       await writeFile(configPath, JSON.stringify({ version: 1, paths: [path] }));
       const run = spawn(process.execPath, ['scan.mjs'], { cwd: import.meta.dirname,
-        env: { ...process.env, FORCE_COLOR: '', A11Y_CONFIG: configPath, A11Y_BASE_URL: base } });
+        env: { ...childEnv, A11Y_CONFIG: configPath, A11Y_BASE_URL: base } });
       let out = '', err = '';
       run.stdout.on('data', data => { out += data; });
       run.stderr.on('data', data => { err += data; });
@@ -142,7 +161,8 @@ test('CLI actual browser exits 0/1 and reports are content-free', async () => {
       assert.equal(err, '');
       const report = JSON.parse(out);
       assert.equal(report.scope, 'automated-only');
-      assert.equal(report.reports.length, 4);
+      if (expected === 2) assert.equal(report.status, 'error');
+      else assert.equal(report.reports.length, 4);
       assert.doesNotMatch(out, /ZZ fixture|ZZ form|<html|data:image|http:/);
     }
   } finally {

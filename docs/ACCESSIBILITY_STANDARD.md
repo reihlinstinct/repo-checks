@@ -48,8 +48,10 @@ service or expose personal data to public CI.
 
 The fixed matrix is Chromium + WebKit at 1280x900 and 390x844. All WCAG A/AA
 violations fail, irrespective of impact tier. No rule exclusions or baselines are
-accepted. Invalid input, missing browsers, blocked external HTTP requests,
-navigation failures and axe failures return error, not pass. Consumer jobs must
+accepted. Invalid input, missing browsers, detected cross-origin requests, unsupported
+conditional/redirect responses, navigation failures and axe failures return error,
+not pass. This is an a11y runner for our own synthetic, no-secret pages only,
+not an isolation or universal egress-control boundary. Consumer jobs must
 have a timeout and must not use continue-on-error. Reports contain only engine,
 width, page ordinal, counts and rule IDs, never DOM, selectors, text or URLs.
 
@@ -64,8 +66,14 @@ browser bypasses Content Security Policy solely to inject axe; production CSP
 is not changed or audited by this action. This bypass can enable inline code
 that production CSP would block, so test results must be compared with the
 production-CSP browser smoke tests. HTTP redirects are inspected before each
-fetch and WebSockets are blocked; this remains a browser test, not a network
-sandbox (DNS-prefetch and other browser side channels are not certified).
+fetch and WebSockets are blocked. Literal speculationrules declarations in
+served content and Speculation-Rules response headers are rejected before parsing.
+This guard is deliberately conservative, not a JavaScript interpreter. Encoded
+or dynamically assembled speculation rules, DNS-prefetch/preconnect, WebRTC,
+blob resources and other browser paths are unsupported and may bypass routing.
+Do not scan untrusted or secret-bearing pages, and do not infer network isolation.
+Redirect bodies are served at the original URL, so relative resource resolution
+can fail closed for paths such as /dir redirecting to /dir/.
 
 Example reviewed route manifest:
 
