@@ -98,6 +98,24 @@ class PolicyTests(unittest.TestCase):
         # Raw bound remains 2 even where normalization contracts the text.
         self.assertEqual('zz', policy.validate_term('ZZ'))
 
+    def test_mac_uses_constant_time_comparison(self):
+        original = policy.hmac.compare_digest
+        with patch.object(policy.hmac, 'compare_digest', wraps=original) as compare:
+            policy.load_policy(synthetic_policy(['ZZAlpha']), ENCODED_KEY)
+            self.assertEqual(1, compare.call_count)
+            left, right = compare.call_args.args
+            self.assertEqual(32, len(left))
+            self.assertEqual(32, len(right))
+
+    def test_entry_cap_independent_of_order_and_duplicates(self):
+        entries = [{'length': 7, 'digest': f'{index:064x}'} for index in range(257)]
+        value = {'schema': policy.SCHEMA, 'unicode_version': __import__('unicodedata').unidata_version,
+                 'entries': entries[:256]}
+        policy.load_policy(resign(value), ENCODED_KEY)
+        value['entries'] = entries
+        with self.assertRaises(policy.PolicyError):
+            policy.load_policy(resign(value), ENCODED_KEY)
+
     def test_domain_separation_and_length_encoding(self):
         text = 'zzalpha'
         digest = policy.term_digest(SYNTHETIC_KEY, text)
@@ -110,15 +128,17 @@ class WorkTests(unittest.TestCase):
     def test_fixed_and_fuzz_differential_against_exact_regex(self):
         rng = random.Random(43)
         alphabet = 'ZZabאב .-_\u0301\u0130\ufdfa\u2028\u2029\u200b\t'
-        terms = ['ZZAlpha', 'ZZFull ZZName', 'ZZאב', 'ZZ.a', 'ZZ\u2028ZZ', 'ZZ\u0301', 'ZZ\ufdfa']
+        terms = ['A\u030a\u0301', '1b', '.y', 'ZZAlpha', 'ZZFull ZZName', 'ZZאב', 'ZZ.a', 'ZZ\u2028ZZ', 'ZZ\u0301', 'ZZ\ufdfa']
         targets = [policy.validate_term(t) for t in terms]
         pattern = re.compile(r'(?<!\w)(?:' + '|'.join(map(re.escape, targets)) + r')(?!\w)')
         lengths = work.prepare_lengths(map(len, targets))
         for raw in terms + [rng.choice(terms) + ''.join(rng.choices(alphabet, k=40)) for _ in range(500)]:
             for text in [policy.normalize(raw), *map(policy.normalize, raw.splitlines())]:
-                candidates = [text[i:j] for i, j in work.pruned_candidates(text, lengths, {'examined_pairs': 0})]
+                stats = {'examined_pairs': 0}
+                candidates = [text[i:j] for i, j in work.pruned_candidates(text, lengths, stats)]
                 self.assertEqual(bool(pattern.search(text)), any(x in targets for x in candidates))
                 count, byte_work = work.work_counts(text, 64)
+                self.assertLessEqual(stats['examined_pairs'], count)
                 self.assertLessEqual(len(candidates), count)
                 self.assertLessEqual(sum(len(x.encode()) for x in candidates), byte_work)
 
@@ -144,6 +164,27 @@ class BoundedScanTests(unittest.TestCase):
     tearDown = fixture.PrivateNameTests.tearDown
     track = fixture.PrivateNameTests.track
     cli = fixture.PrivateNameTests.cli
+
+    def test_single_point_and_first_alpha_at_end_cli_findings(self):
+        # The first raw term composes to one normalized code point.
+        for raw, content in [('A\u030a\u0301', '(ǻ)'), ('1b', '1b'), ('.y', '.y')]:
+            self.track('x', content)
+            run = self.cli(synthetic_policy([raw]))
+            self.assertEqual(1, run.returncode)
+            self.assertEqual({'schema_version': 1, 'status': 'findings'}, json.loads(run.stdout))
+            self.assertEqual('', run.stderr)
+
+    def test_alarm_armed_before_policy_and_inventory_then_cancelled(self):
+        events = []
+        original = names.load_policy
+        def load(*args):
+            events.append('policy')
+            return original(*args)
+        def alarm(seconds):
+            events.append(seconds)
+        with patch.dict(os.environ, {names.ENV_KEY: self.policy, names.KEY_ENV: ENCODED_KEY}), patch.object(names.signal, 'alarm', alarm), patch.object(names, 'load_policy', load), contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(0, names.main(['--root', str(self.root)]))
+        self.assertEqual([30, 'policy', 0], events)
 
     def test_wrong_key_fails_before_inventory(self):
         with patch.object(names, 'scan', side_effect=AssertionError('inventory reached')) as scanned:

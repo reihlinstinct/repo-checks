@@ -100,12 +100,17 @@ Synthetic tests cover authenticated policy mutation, wrong-key errors before
 inventory, strict schema/base64 handling, old-array rejection, normalization
 and regex differential tests, public cap boundaries, all line separators,
 whole-path matches, between-pass changes, no match short-circuit, fixed output
-and all sensitive environment keys. Existing secure-reader regressions remain.
+and all sensitive environment keys. Single-normalized-code-point and first-alpha-at-end
+terms have CLI finding regressions. Differential fuzz asserts examined second-pass
+pairs never exceed the first-pass public candidate count. Direct regressions cover
+constant-time MAC comparison, the entry-count cap independently of ordering, and
+the armed/cancelled alarm. Existing secure-reader regressions remain.
 
 `python3 -I tools/benchmark_bounded_name_scan.py` generates temporary Git
 repositories and public dummy policies in memory, then runs the actual isolated
 CLI repeatedly. It covers dense words, prose, near-aggregate normalized non-ASCII
-text, many lines, normalization expansion and over-budget errors. Output contains
+text, many lines, normalization expansion, combined near-candidate/normalized-point
+caps and over-budget errors. Output contains
 synthetic corpus identifiers, runtime/Unicode versions, elapsed times and expected
 exit codes only. Each repetition starts a fresh interpreter; OS caches are not
 flushed. The benchmark neither reads actual policies nor changes configuration.

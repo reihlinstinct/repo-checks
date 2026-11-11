@@ -38,6 +38,8 @@ def main():
     # Every byte below is generated here. Never accept an external corpus path.
     corpora = {
         'dense_words': ['a a ' * 15000] * 2,
+        # Approximately 2m candidates and 2m normalized points together.
+        'near_caps': ['a a ' * 15632] * 2 + ['😀' * 234300] * 8,
         'prose': ['ZZAlpha met ZZBeta. ' * 10000] * 2,
         'nonascii_points': ['😀' * 249900] * 8,
         'many_lines': ['a\n' * 49000] * 2,
