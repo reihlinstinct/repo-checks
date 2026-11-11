@@ -183,12 +183,14 @@ class WorkflowTests(unittest.TestCase):
                 self.assertNotIn(key, actual)
                 actual[key] = value.strip()
             self.assertEqual(expected[job], actual)
-        self.assertEqual(1, text.count('${{ secrets.'))
+        self.assertEqual(2, text.count('${{ secrets.'))
         self.assertEqual(0, sections['bind'].count('secrets.'))
         self.assertEqual(0, sections['report'].count('secrets.'))
         secret_step = sections['scan'].split('      - name: Secret-sourced private-name scan\n', 1)[1].split('      - name:', 1)[0]
-        self.assertEqual(1, secret_step.count('secrets.'))
-        self.assertIn('PRIVATE_NAME_TERMS_JSON: ${{ secrets.PRIVATE_NAME_TERMS_JSON }}', secret_step)
+        self.assertEqual(2, secret_step.count('secrets.'))
+        for name in ('PRIVATE_NAME_HMAC_POLICY_JSON', 'PRIVATE_NAME_HMAC_KEY_B64'):
+            self.assertIn(name + ': ${{ secrets.' + name + ' }}', secret_step)
+        self.assertNotIn('PRIVATE_NAME_TERMS_JSON', text)
         self.assertIn("    if: always() && needs.bind.result == 'success'", sections['report'])
         self.assertIn('permissions: {}', text.split('jobs:', 1)[0])
 
@@ -196,8 +198,8 @@ class WorkflowTests(unittest.TestCase):
         text = WORKFLOW.read_text()
         import re
         pins = re.findall(r'uses: reihlinstinct/repo-checks/actions/([^@]+)@([^\s]+)', text)
-        self.assertEqual([('private-names', '52293de5de6c2257b531e36a24eb2be61d80d509'),
-                          ('privacy', '52293de5de6c2257b531e36a24eb2be61d80d509')], pins)
+        self.assertEqual([('private-names', 'eeb45016361705d34ae212b0b615351f81cac9cd'),
+                          ('privacy', 'eeb45016361705d34ae212b0b615351f81cac9cd')], pins)
         for line in ['export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null GIT_TERMINAL_PROMPT=0',
                      'export GIT_CONFIG_COUNT=3',
                      'export GIT_CONFIG_KEY_0=core.hooksPath GIT_CONFIG_VALUE_0=/dev/null',
@@ -210,11 +212,13 @@ class WorkflowTests(unittest.TestCase):
         scan = text.split('\n  scan:\n')[1].split('\n  report:\n')[0]
         report = text.split('\n  report:\n')[1]
         self.assertIn('environment: privacy-policy', scan)
-        self.assertIn('PRIVATE_NAME_TERMS_JSON:\n        required: true', text)
+        for name in ('PRIVATE_NAME_HMAC_POLICY_JSON', 'PRIVATE_NAME_HMAC_KEY_B64'):
+            self.assertIn(name + ':\n        required: true', text)
         self.assertIn('contents: read', scan)
-        self.assertIn('actions/private-names@52293de5de6c2257b531e36a24eb2be61d80d509', scan)
+        self.assertIn('actions/private-names@eeb45016361705d34ae212b0b615351f81cac9cd', scan)
         self.assertNotIn('statuses: write', scan)
-        self.assertEqual(1, scan.count('PRIVATE_NAME_TERMS_JSON:'))
+        self.assertEqual(1, scan.count('PRIVATE_NAME_HMAC_POLICY_JSON:'))
+        self.assertEqual(1, scan.count('PRIVATE_NAME_HMAC_KEY_B64:'))
         self.assertNotIn('secrets.', report)
         self.assertNotIn('checkout', report)
         self.assertIn('statuses: write', report)

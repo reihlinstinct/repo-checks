@@ -36,10 +36,9 @@ pilot, and do not treat mocked/local tests as real consumer proof.
 
 The [HMAC name guard](docs/PRIVATE_NAME_GUARD.md) accepts an authenticated keyed
 policy and uses deterministic public work caps and a two-pass matcher. This is a
-synthetic-only implementation stage. The existing reusable workflow remains pinned
-to the earlier scanner; new secret forwarding and landed pins require a separate
-reviewed integration change. No actual policy conversion or consumer rollout is
-included. Run the generated-corpus end-to-end measurement with:
+synthetic-only implementation stage. The reusable workflow pins the landed
+HMAC scanner and explicitly forwards the protected policy and key. No actual
+policy conversion or consumer rollout is included. Run the generated-corpus end-to-end measurement with:
 
 ```sh
 python3 -I tools/benchmark_bounded_name_scan.py

@@ -2,7 +2,9 @@ name: Trusted private name guard
 on:
   workflow_call:
     secrets:
-      PRIVATE_NAME_TERMS_JSON:
+      PRIVATE_NAME_HMAC_POLICY_JSON:
+        required: true
+      PRIVATE_NAME_HMAC_KEY_B64:
         required: true
 permissions: {}
 jobs:
@@ -68,16 +70,17 @@ jobs:
           [[ "$(git -C "$root" rev-parse HEAD)" == "$CANDIDATE_SHA" ]]
           [[ -z "$(git -C "$root" status --porcelain=v1 --untracked-files=all)" ]]
       - name: Secret-sourced private-name scan
-        uses: reihlinstinct/repo-checks/actions/private-names@52293de5de6c2257b531e36a24eb2be61d80d509
+        uses: reihlinstinct/repo-checks/actions/private-names@eeb45016361705d34ae212b0b615351f81cac9cd
         with:
           checkout-root: ${{ github.workspace }}/candidate
         env:
-          PRIVATE_NAME_TERMS_JSON: ${{ secrets.PRIVATE_NAME_TERMS_JSON }}
+          PRIVATE_NAME_HMAC_POLICY_JSON: ${{ secrets.PRIVATE_NAME_HMAC_POLICY_JSON }}
+          PRIVATE_NAME_HMAC_KEY_B64: ${{ secrets.PRIVATE_NAME_HMAC_KEY_B64 }}
       - name: Generic privacy scan (counts-only findings remain non-blocking)
         id: generic
         if: always()
         continue-on-error: true
-        uses: reihlinstinct/repo-checks/actions/privacy@52293de5de6c2257b531e36a24eb2be61d80d509
+        uses: reihlinstinct/repo-checks/actions/privacy@eeb45016361705d34ae212b0b615351f81cac9cd
         with:
           checkout-root: ${{ github.workspace }}/candidate
       - name: Reject generic scanner errors, not existing synthetic findings
