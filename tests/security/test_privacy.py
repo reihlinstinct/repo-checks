@@ -233,5 +233,47 @@ class ExtraPrivacyTests(unittest.TestCase):
         self.assertTrue(all(c['stderr']==subprocess.DEVNULL for c in calls))
 
 
+class PhoneBranchBoundTests(unittest.TestCase):
+    """Per-branch digit bounds of PHONE. Runtime-assembled synthetic digits only."""
+
+    def hit(self, value):
+        return p.PHONE.fullmatch(value) is not None
+
+    def cat(self, value):
+        return 'phone' in p.text_categories(value)
+
+    def check(self, prefix, lo, hi):
+        for n in (lo, hi):
+            v = prefix + '7' * n
+            self.assertTrue(self.hit(v), v)
+            self.assertTrue(self.cat(v), v)
+        for n in (lo - 1, hi + 1):
+            v = prefix + '7' * n
+            self.assertFalse(self.hit(v), v)
+            self.assertFalse(self.cat(v), v)
+
+    def test_israeli_972_branch(self):
+        self.check('972', 9, 9)
+
+    def test_plus_branch(self):
+        # '+' then 1 digit, then 7..14 more: 8..15 total digits
+        self.check('+', 8, 15)
+
+    def test_double_zero_branch(self):
+        # '00' then 8..15 digits
+        self.check('00', 8, 15)
+
+    def test_local_branch(self):
+        # '0' + [2-9] + 7..8 digits: 9..10 digits total
+        self.check('05', 7, 8)
+
+    def test_branches_do_not_borrow_bounds(self):
+        # plus must not accept the 00 or local bounds and vice versa
+        self.assertFalse(self.hit('+' + '7' * 7))
+        self.assertFalse(self.hit('00' + '7' * 7))
+        self.assertFalse(self.hit('05' + '7' * 6))
+        self.assertFalse(self.hit('972' + '7' * 8))
+
+
 if __name__ == '__main__':
     unittest.main()
