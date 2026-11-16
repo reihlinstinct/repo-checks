@@ -33,6 +33,17 @@ def token():
 
 
 class DetectorTests(unittest.TestCase):
+    def test_repeated_at_email_candidates(self):
+        for value in ['a@@zz-domain.co.il', 'a@@@zz-domain.co.il', 'x a@@zz-domain.co.il y', 'a@@b.com']:
+            self.assertEqual({'email'}, scan.categories(value), value)
+        for value in ['a@@example.com', 'a@@sub.example.org', 'a@@zz.invalid', '@@@@@@', '@@zz-domain.co.il', 'a@@', 'a@@b', 'a@@1.23']:
+            self.assertFalse(scan.categories(value), value)
+
+    def test_repeated_at_long_token_limit_is_value_free(self):
+        with self.assertRaises(scan.InputError) as ctx:
+            scan.categories('a' + '@' * 400)
+        self.assertNotIn('a@', str(ctx.exception))
+
     def test_planted_patterns_block_reserved_synthetic_and_plates_pass(self):
         for value, kind in [(identity(), 'id'), (mobile(), 'phone'), ('+972' + mobile()[1:], 'phone'), ('05' + '4-234-5678', 'phone'), (token(), 'secret'), ('xx' + '@' + 'zz-domain.co.il', 'email'), ('pass' + 'word=' + 'zz-test-value', 'password')]:
             self.assertIn(kind, scan.categories(value))
