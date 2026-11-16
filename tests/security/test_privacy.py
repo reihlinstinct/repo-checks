@@ -16,6 +16,12 @@ spec.loader.exec_module(p)
 
 
 class PrivacyTests(unittest.TestCase):
+    def test_repeated_at_email_candidates(self):
+        for value in ['a{at}{at}zz-domain.co.il'.format(at=chr(64)), 'a{at}{at}{at}zz-domain.co.il'.format(at=chr(64)), 'a{at}{at}b.com'.format(at=chr(64))]:
+            self.assertEqual({'email'}, p.text_categories(value), value)
+        for value in ['a{at}{at}example.com'.format(at=chr(64)), 'a{at}{at}zz.invalid'.format(at=chr(64)), '{at}{at}{at}{at}{at}{at}'.format(at=chr(64)), '{at}{at}zz-domain.co.il'.format(at=chr(64)), 'a{at}{at}'.format(at=chr(64))]:
+            self.assertEqual(set(), p.text_categories(value), value)
+
     def test_email_token_exemption_not_whole_line(self):
         self.assertEqual(set(), p.text_categories('test@example.invalid'))
         self.assertEqual({'email'}, p.text_categories('test@example.invalid contact ' + 'fixture' + '@' + 'private.test'))

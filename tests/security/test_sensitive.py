@@ -33,6 +33,17 @@ def token():
 
 
 class DetectorTests(unittest.TestCase):
+    def test_repeated_at_email_candidates(self):
+        for value in ['a{at}{at}zz-domain.co.il'.format(at=chr(64)), 'a{at}{at}{at}zz-domain.co.il'.format(at=chr(64)), 'x a{at}{at}zz-domain.co.il y'.format(at=chr(64)), 'a{at}{at}b.com'.format(at=chr(64))]:
+            self.assertEqual({'email'}, scan.categories(value), value)
+        for value in ['a{at}{at}example.com'.format(at=chr(64)), 'a{at}{at}sub.example.org'.format(at=chr(64)), 'a{at}{at}zz.invalid'.format(at=chr(64)), '{at}{at}{at}{at}{at}{at}'.format(at=chr(64)), '{at}{at}zz-domain.co.il'.format(at=chr(64)), 'a{at}{at}'.format(at=chr(64)), 'a{at}{at}b'.format(at=chr(64)), 'a{at}{at}1.23'.format(at=chr(64))]:
+            self.assertFalse(scan.categories(value), value)
+
+    def test_repeated_at_long_token_limit_is_value_free(self):
+        with self.assertRaises(scan.InputError) as ctx:
+            scan.categories('a' + '@' * 400)
+        self.assertNotIn('a@', str(ctx.exception))
+
     def test_planted_patterns_block_reserved_synthetic_and_plates_pass(self):
         for value, kind in [(identity(), 'id'), (mobile(), 'phone'), ('+972' + mobile()[1:], 'phone'), ('05' + '4-234-5678', 'phone'), (token(), 'secret'), ('xx' + '@' + 'zz-domain.co.il', 'email'), ('pass' + 'word=' + 'zz-test-value', 'password')]:
             self.assertIn(kind, scan.categories(value))
