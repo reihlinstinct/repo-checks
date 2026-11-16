@@ -1,0 +1,23 @@
+name: Bounded Scorecard guard
+description: Run a pinned counts-only offline guard against a caller checkout.
+inputs:
+  checkout-root:
+    description: Absolute caller checkout path within GITHUB_WORKSPACE.
+    required: true
+  policy:
+    description: Relative tracked JSON policy path.
+    default: .repo-checks.json
+outputs:
+  result:
+    description: Validated fixed-schema JSON result (no finding values).
+    value: ${{ steps.check.outputs.result }}
+runs:
+  using: composite
+  steps:
+    - id: check
+      shell: bash
+      env:
+        CHECK_ROOT: ${{ inputs.checkout-root }}
+        CHECK_POLICY: ${{ inputs.policy }}
+        TRUSTED_ACTION: ${{ github.action_path }}
+      run: python3 -I "$TRUSTED_ACTION/bootstrap.py"
