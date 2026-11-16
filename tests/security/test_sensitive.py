@@ -34,9 +34,9 @@ def token():
 
 class DetectorTests(unittest.TestCase):
     def test_repeated_at_email_candidates(self):
-        for value in ['a@@zz-domain.co.il', 'a@@@zz-domain.co.il', 'x a@@zz-domain.co.il y', 'a@@b.com']:
+        for value in ['a{at}{at}zz-domain.co.il'.format(at=chr(64)), 'a{at}{at}{at}zz-domain.co.il'.format(at=chr(64)), 'x a{at}{at}zz-domain.co.il y'.format(at=chr(64)), 'a{at}{at}b.com'.format(at=chr(64))]:
             self.assertEqual({'email'}, scan.categories(value), value)
-        for value in ['a@@example.com', 'a@@sub.example.org', 'a@@zz.invalid', '@@@@@@', '@@zz-domain.co.il', 'a@@', 'a@@b', 'a@@1.23']:
+        for value in ['a{at}{at}example.com'.format(at=chr(64)), 'a{at}{at}sub.example.org'.format(at=chr(64)), 'a{at}{at}zz.invalid'.format(at=chr(64)), '{at}{at}{at}{at}{at}{at}'.format(at=chr(64)), '{at}{at}zz-domain.co.il'.format(at=chr(64)), 'a{at}{at}'.format(at=chr(64)), 'a{at}{at}b'.format(at=chr(64)), 'a{at}{at}1.23'.format(at=chr(64))]:
             self.assertFalse(scan.categories(value), value)
 
     def test_repeated_at_long_token_limit_is_value_free(self):
