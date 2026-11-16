@@ -63,7 +63,7 @@ def text_categories(text: str, path: str = "") -> set[str]:
             continue
         if len(token) > 320:
             raise ScanError()
-        parts = token.split("@")
+        parts = re.sub("@{2,}", "@", token).split("@")  # repeated-at: recognition only
         for local, domain in zip(parts, parts[1:]):
             domain = domain.lower().rstrip(".")
             if local and re.fullmatch(r"[\w.\-]+\.[^\W\d_]{2,}", domain, re.UNICODE):
