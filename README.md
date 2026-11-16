@@ -75,7 +75,7 @@ remain outside this automated gate. No compliance certification is claimed.
 The default `browser-runtime: install` still installs Chromium/WebKit and their
 system dependencies. To avoid an apt mirror dependency, a caller may set
 `browser-runtime: preinstalled` in a reviewed, digest-pinned Playwright container
-matching `actions/a11y/package-lock.json`. The regression workflow shows the
+matching `actions/a11y/package-lock.json`. The offline Python contract test rejects image-tag, lockfile and package version drift, as well as a missing digest. Digest updates still require the full synthetic browser matrix. The regression workflow shows the
 current image pin. Both modes launch and render in both engines before scanning;
 missing browsers, libraries or bad renders fail closed. No browser cache or
 skipped axe check is involved. Update the image digest and lockfile together

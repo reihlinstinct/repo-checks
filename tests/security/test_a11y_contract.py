@@ -1,9 +1,33 @@
 """The shared accessibility action is pinned, tested and part of repo layout."""
 import json
 from pathlib import Path
+import re
 import unittest
 
 ROOT = Path(__file__).resolve().parents[2]
+
+
+def browser_image_version(workflow):
+    """Accept exactly one reviewed Noble image with an immutable digest."""
+    images = re.findall(r"^\s*image:\s*(\S+)\s*$", workflow, re.MULTILINE)
+    if len(images) != 1:
+        raise ValueError('Expected one pinned browser image')
+    match = re.fullmatch(
+        r'mcr\.microsoft\.com/playwright:v(\d+\.\d+\.\d+)-noble@sha256:[0-9a-f]{64}',
+        images[0],
+    )
+    if match is None:
+        raise ValueError('Expected versioned Noble image with SHA-256 digest')
+    return match.group(1)
+
+
+def assert_browser_versions(test, workflow, package, lock):
+    """Cross-check declared, root-lock, runtime and bundled-browser versions."""
+    version = browser_image_version(workflow)
+    test.assertEqual(version, package['dependencies']['playwright'])
+    test.assertEqual(version, lock['packages']['']['dependencies']['playwright'])
+    for name in ['playwright', 'playwright-core']:
+        test.assertEqual(version, lock['packages']['node_modules/' + name]['version'])
 
 
 class AccessibilityContract(unittest.TestCase):
@@ -44,3 +68,39 @@ class AccessibilityContract(unittest.TestCase):
         for boundary in ['not SI 5568 certification', 'do NOT meet that two-OS',
                          'incomplete', 'page-load states only', '2.4.10']:
             self.assertIn(boundary, doc)
+
+
+class BrowserImageLockContract(unittest.TestCase):
+    def setUp(self):
+        self.workflow = (ROOT / '.github/workflows/a11y.yml').read_text()
+        folder = ROOT / 'actions/a11y'
+        self.package = json.loads((folder / 'package.json').read_text())
+        self.lock = json.loads((folder / 'package-lock.json').read_text())
+
+    def test_pinned_image_matches_all_locked_browser_versions(self):
+        assert_browser_versions(self, self.workflow, self.package, self.lock)
+
+    def test_version_drift_is_rejected_at_every_layer(self):
+        version = self.package['dependencies']['playwright']
+        with self.assertRaises(AssertionError):
+            assert_browser_versions(self, self.workflow.replace('v' + version, 'v0.0.0'),
+                                    self.package, self.lock)
+        for name in ['', 'node_modules/playwright', 'node_modules/playwright-core']:
+            with self.subTest(layer=name):
+                lock = json.loads(json.dumps(self.lock))
+                entry = lock['packages'][name]
+                if name:
+                    entry['version'] = '0.0.0'
+                else:
+                    entry['dependencies']['playwright'] = '0.0.0'
+                with self.assertRaises(AssertionError):
+                    assert_browser_versions(self, self.workflow, self.package, lock)
+
+    def test_unpinned_or_ambiguous_images_are_rejected(self):
+        valid = next(line for line in self.workflow.splitlines() if 'image:' in line)
+        invalid = [valid.split('@')[0], valid.replace('-noble', '-jammy'),
+                   valid[:-1], valid + 'f', valid + '\n' + valid]
+        for image in invalid:
+            with self.subTest(image=image):
+                with self.assertRaises(ValueError):
+                    browser_image_version(image)
