@@ -70,6 +70,13 @@ Violations and tool errors fail CI; reports contain counts and rule IDs only.
 Manual testing, dynamic UI states, native OS testing and SI 5568 national changes
 remain outside this automated gate. No compliance certification is claimed.
 
+### Browser installer verification
+
+CI also exercises the default installer on a non-container Ubuntu runner,
+using a synthetic localhost page. Offline shell-contract tests verify that
+unknown runtime inputs stop before installing tools, and that preinstalled
+mode still checks both browser engines without downloading them.
+
 ### Pinned browser runtime
 
 The default `browser-runtime: install` still installs Chromium/WebKit and their

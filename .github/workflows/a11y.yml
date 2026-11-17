@@ -36,3 +36,33 @@ jobs:
         if: always()
         run: |
           printf '%s\n' '## Accessibility' 'Synthetic axe action regression suite: Chromium + WebKit, desktop + mobile.' 'Pass is automated-only, never SI 5568 certification. Manual checks remain required.' >> "$GITHUB_STEP_SUMMARY"
+  default-install:
+    name: Default browser installer smoke
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - name: Start synthetic local preview
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/a11y-preview"
+          printf '%s\n' '<!doctype html><html lang="en"><meta charset="utf-8"><title>ZZ fixture</title><body><main><h1>ZZ fixture</h1><button>ZZ submit</button></main></body></html>' > "$RUNNER_TEMP/a11y-preview/index.html"
+          printf '%s\n' '{"version":1,"paths":["/"]}' > "$RUNNER_TEMP/a11y-routes.json"
+          python3 -m http.server 8765 --bind 127.0.0.1 --directory "$RUNNER_TEMP/a11y-preview" > "$RUNNER_TEMP/a11y-server.log" 2>&1 &
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:8765/ >/dev/null; then exit 0; fi
+            sleep 1
+          done
+          exit 1
+      - name: Exercise default composite installer and browser matrix
+        uses: ./actions/a11y
+        with:
+          base-url: http://127.0.0.1:8765
+          config: ${{ runner.temp }}/a11y-routes.json
+      - name: Installer scope summary
+        if: always()
+        shell: bash
+        run: |
+          printf '%s\n' '## Default browser install' 'Non-container Ubuntu runner, composite default install mode, Chromium and WebKit preflight plus synthetic local-page accessibility matrix. No production URL or secrets.' >> "$GITHUB_STEP_SUMMARY"
