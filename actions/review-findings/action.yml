@@ -29,7 +29,7 @@ runs:
         CHECK_HEAD: ${{ inputs.head }}
         GITHUB_TOKEN: ${{ inputs.token }}
       run: >-
-        python3 -I "$CHECK_ACTION_ROOT/tools/review_findings.py"
+        python3 -I "$CHECK_ACTION_ROOT/../../tools/review_findings.py"
         --root "$CHECK_CONSUMER_ROOT"
         --repository "$CHECK_REPOSITORY"
         --pr "$CHECK_PR"

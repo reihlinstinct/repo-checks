@@ -114,6 +114,28 @@ class EvidenceTest(unittest.TestCase):
         with patch('subprocess.run', side_effect=AssertionError('execution forbidden')):
             self.check()
 
+    def test_action_wrapper_path_resolves_to_real_adapter(self):
+        action = ROOT / 'actions/review-findings/action.yml'
+        text = action.read_text()
+        self.assertIn('"$CHECK_ACTION_ROOT/../../tools/review_findings.py"', text)
+        self.assertNotIn('"$CHECK_ACTION_ROOT/tools/', text)
+        self.assertTrue((action.parent / '../../tools/review_findings.py').resolve().is_file())
+
+    def test_malformed_list_and_dict_entries_fail_cleanly(self):
+        for key, value in [('regression_paths', [[]]), ('regression_paths', [{}]), ('regression_paths', [None]),
+                           ('regression_paths', [1])]:
+            doc = copy.deepcopy(self.doc)
+            doc['findings'][0][key] = value
+            with self.subTest(value=value), self.assertRaises(InvalidEvidence):
+                self.check(doc)
+        e = {k: self.entry[k] for k in ('issue', 'mode', 'review_url', 'affected_head', 'summary')}
+        e.update(mode='manual-limit', reason='Needs a device for real behavior.', owner='Repository maintainer',
+                 remaining_automation='Synthetic assertions remain in CI.', checklist=[[], {}])
+        doc = copy.deepcopy(self.doc)
+        doc['findings'] = [e]
+        with self.assertRaises(InvalidEvidence):
+            self.check(doc)
+
 
 if __name__ == '__main__':
     unittest.main()

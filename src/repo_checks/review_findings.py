@@ -79,7 +79,7 @@ def validate(root, repository, pr_number, expected, document):
             if set(entry) != shared | {"regression_paths", "workflow", "command", "negative_control", "pass_evidence"}:
                 raise InvalidEvidence("invalid automated fields")
             paths = entry["regression_paths"]
-            if not isinstance(paths, list) or not 1 <= len(paths) <= 20 or len(set(paths)) != len(paths):
+            if not isinstance(paths, list) or not 1 <= len(paths) <= 20 or not all(isinstance(x, str) for x in paths) or len(set(paths)) != len(paths):
                 raise InvalidEvidence("invalid regression paths")
             for path in paths:
                 safe_file(root, path)
