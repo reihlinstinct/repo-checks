@@ -23,3 +23,7 @@ UI changes follow [the a11y standard](docs/ACCESSIBILITY_STANDARD.md): state the
 routes, languages and interaction states tested, automated outcomes and manual
 gaps. Test new failures with regressions. Do not label automated-only results as
 SI 5568 or WCAG conformance. Preserve the root ACCESSIBILITY.md layout requirement.
+
+## Review findings to regression checks
+
+Every non-trivial review finding needs a labeled tracking issue and a regression test/lint in the same or linked follow-up PR. Record failing-before/passing-after evidence, real CI wiring and any manual limits under [the shared rule](docs/REVIEW_FINDINGS.md). Security/material findings remain blocking; declarations are not risk acceptance.
