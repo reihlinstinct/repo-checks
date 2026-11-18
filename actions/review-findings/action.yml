@@ -1,0 +1,36 @@
+name: Review findings evidence
+description: Bounded read-only declarations and path validation; never executes consumer code.
+inputs:
+  root:
+    description: Consumer checkout directory
+    required: true
+  repository:
+    description: Owner/repository from trusted event context
+    required: true
+  pull-request:
+    description: PR number from trusted event context
+    required: true
+  head:
+    description: Exact PR head from trusted event context
+    required: true
+  token:
+    description: Read-only contents/issues/pull-requests token
+    required: true
+runs:
+  using: composite
+  steps:
+    - name: Validate review findings declarations
+      shell: bash
+      env:
+        CHECK_ACTION_ROOT: ${{ github.action_path }}
+        CHECK_CONSUMER_ROOT: ${{ inputs.root }}
+        CHECK_REPOSITORY: ${{ inputs.repository }}
+        CHECK_PR: ${{ inputs.pull-request }}
+        CHECK_HEAD: ${{ inputs.head }}
+        GITHUB_TOKEN: ${{ inputs.token }}
+      run: >-
+        python3 -I "$CHECK_ACTION_ROOT/tools/review_findings.py"
+        --root "$CHECK_CONSUMER_ROOT"
+        --repository "$CHECK_REPOSITORY"
+        --pr "$CHECK_PR"
+        --head "$CHECK_HEAD"

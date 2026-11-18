@@ -82,3 +82,7 @@ skipped axe check is involved. Update the image digest and lockfile together
 and run the full synthetic positive/negative matrix. Containers run trusted
 synthetic previews only; they do not provide a network-isolation or conformance
 claim. See https://playwright.dev/docs/docker for runtime maintenance.
+
+## Review findings evidence gate
+
+[Rule, limits, manifest and pinned rollout](docs/REVIEW_FINDINGS.md) describe the bounded read-only declaration/path validator. It does not prove test semantics or discover unlinked findings. Independent review and consumer adoption remain required.
