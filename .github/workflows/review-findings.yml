@@ -1,0 +1,27 @@
+name: Review findings
+on:
+  workflow_call:
+permissions:
+  contents: read
+  issues: read
+  pull-requests: read
+jobs:
+  evidence:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+          submodules: false
+          lfs: false
+          path: consumer
+      - uses: reihlinstinct/repo-checks/actions/review-findings@7e4b1e275be3c04034d7b00afa8051f4be0d5962
+        with:
+          root: consumer
+          repository: ${{ github.repository }}
+          pull-request: ${{ github.event.pull_request.number }}
+          head: ${{ github.event.pull_request.head.sha }}
+          token: ${{ github.token }}
